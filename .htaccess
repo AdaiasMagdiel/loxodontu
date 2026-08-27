@@ -1,0 +1,30 @@
+RewriteEngine On
+
+# Force HTTPS (redirects HTTP to HTTPS)
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [L,R=301]
+
+# Remove www (redirects www to non-www)
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^(.*)$ https://%1/$1 [L,R=301]
+
+# General settings
+Options -Indexes
+Options +FollowSymLinks
+
+# Disable Apache version exposure
+Header always unset X-Powered-By
+
+# Allow access to static files
+RewriteRule ^assets/.* - [L]
+
+# Allow access to static files
+RewriteRule ^public/.* - [L]
+
+# Block direct access to PHP files, except index.php
+RewriteCond %{REQUEST_URI} !/index\.php$ [NC]
+RewriteCond %{REQUEST_URI} \.php$ [NC]
+RewriteRule ^ - [R=404,L]
+
+# Redirect all other requests to index.php
+RewriteRule ^ index.php [L]

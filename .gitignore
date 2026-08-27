@@ -1,0 +1,22 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Composer
+vendor/
+composer.phar
+
+# Logs
+*.log
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
