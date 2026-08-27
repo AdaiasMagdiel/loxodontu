@@ -15,8 +15,8 @@ jobs:
       matrix:
         php: ["8.2", "8.3"]
         db:
-          - { name: mysql, image: "mysql:8.0" }
-          - { name: mariadb, image: "mariadb:11" }
+          - { name: mysql, image: "mysql:8.0", healthcmd: "mysqladmin ping -h localhost -uroot -proot" }
+          - { name: mariadb, image: "mariadb:11", healthcmd: "mariadb-admin ping -h localhost -uroot -proot" }
 
     services:
       database:
@@ -27,7 +27,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
+          --health-cmd="${{ matrix.db.healthcmd }}"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=15
