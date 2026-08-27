@@ -207,6 +207,231 @@ class Tables
         return $res->setStatusCode(204);
     }
 
+    /** Renames a table, including its physical backing table. */
+    public static function rename(Request $req, Response $res, stdClass $params): Response
+    {
+        $body    = $req->getJson(ignoreContentType: true) ?? [];
+        $pdo     = Database::getConn('default');
+        $project = self::findOwnedProject($pdo, $params->project_id, $params->user['id']);
+
+        if (!$project) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
+        }
+
+        $stmt = $pdo->prepare('SELECT id, name FROM project_tables WHERE id = ? AND project_id = ? LIMIT 1');
+        $stmt->execute([$params->table_id, $project['id']]);
+        $table = $stmt->fetch();
+
+        if (!$table) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
+        }
+
+        $newName = trim($body['name'] ?? '');
+        $error   = self::validateIdentifier($newName, 'name');
+        if ($error) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if ($newName === $table['name']) {
+            return $res->withJson(['id' => (int) $table['id'], 'name' => $newName]);
+        }
+
+        $stmt = $pdo->prepare('SELECT id FROM project_tables WHERE project_id = ? AND name = ? LIMIT 1');
+        $stmt->execute([$project['id'], $newName]);
+        if ($stmt->fetch()) {
+            return $res->setStatusCode(409)->withJson(['error' => 'Table name already exists in this project']);
+        }
+
+        $oldPhysical = self::physicalName((int) $project['id'], $table['name']);
+        $newPhysical = self::physicalName((int) $project['id'], $newName);
+
+        if (strlen($newPhysical) > 64) {
+            return $res->setStatusCode(422)->withJson(['error' => 'name is too long once prefixed with the project id']);
+        }
+
+        // DDL first: nothing has changed yet if it fails, so there's no metadata to roll back.
+        try {
+            $pdo->exec('RENAME TABLE `' . $oldPhysical . '` TO `' . $newPhysical . '`');
+        } catch (\Throwable $e) {
+            return $res->setStatusCode(500)->withJson(['error' => 'Failed to rename underlying table: ' . $e->getMessage()]);
+        }
+
+        $pdo->prepare('UPDATE project_tables SET name = ? WHERE id = ?')->execute([$newName, $table['id']]);
+
+        return $res->withJson(['id' => (int) $table['id'], 'name' => $newName]);
+    }
+
+    /** Adds a column to an existing table. */
+    public static function addColumn(Request $req, Response $res, stdClass $params): Response
+    {
+        $body  = $req->getJson(ignoreContentType: true) ?? [];
+        $pdo   = Database::getConn('default');
+        $table = self::findOwnedTable($pdo, $params->project_id, $params->table_id, $params->user['id']);
+
+        if (!$table) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
+        }
+
+        $name = trim($body['name'] ?? '');
+        $error = self::validateIdentifier($name, 'name');
+        if ($error) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if ($name === 'id') {
+            return $res->setStatusCode(422)->withJson(['error' => "name cannot be 'id'"]);
+        }
+
+        $type = $body['type'] ?? '';
+        if (!in_array($type, self::VALID_TYPES, true)) {
+            return $res->setStatusCode(422)->withJson(['error' => 'type must be one of: ' . implode(', ', self::VALID_TYPES)]);
+        }
+
+        $stmt = $pdo->prepare('SELECT id FROM project_columns WHERE table_id = ? AND name = ? LIMIT 1');
+        $stmt->execute([$table['id'], $name]);
+        if ($stmt->fetch()) {
+            return $res->setStatusCode(409)->withJson(['error' => 'Column name already exists on this table']);
+        }
+
+        $col = [
+            'name'          => $name,
+            'type'          => $type,
+            'nullable'      => (bool) ($body['nullable'] ?? false),
+            'default_value' => $body['default_value'] ?? null,
+        ];
+
+        // DDL first: nothing has changed yet if it fails, so there's no metadata to roll back.
+        try {
+            $pdo->exec('ALTER TABLE `' . $table['physical_name'] . '` ADD COLUMN ' . self::columnDefinitionSql($pdo, $col));
+        } catch (\Throwable $e) {
+            return $res->setStatusCode(500)->withJson(['error' => 'Failed to add column: ' . $e->getMessage()]);
+        }
+
+        $stmt = $pdo->prepare('SELECT COALESCE(MAX(position), -1) + 1 FROM project_columns WHERE table_id = ?');
+        $stmt->execute([$table['id']]);
+        $position = (int) $stmt->fetchColumn();
+
+        $pdo->prepare(
+            'INSERT INTO project_columns (table_id, name, type, nullable, default_value, position) VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$table['id'], $name, $type, (int) $col['nullable'], $col['default_value'], $position]);
+
+        return $res->setStatusCode(201)->withJson([
+            'id'            => (int) $pdo->lastInsertId(),
+            'name'          => $name,
+            'type'          => $type,
+            'nullable'      => $col['nullable'],
+            'default_value' => $col['default_value'],
+            'position'      => $position,
+        ]);
+    }
+
+    /** Renames a column and/or changes its type, nullability, or default. */
+    public static function updateColumn(Request $req, Response $res, stdClass $params): Response
+    {
+        $body  = $req->getJson(ignoreContentType: true) ?? [];
+        $pdo   = Database::getConn('default');
+        $table = self::findOwnedTable($pdo, $params->project_id, $params->table_id, $params->user['id']);
+
+        if (!$table) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
+        }
+
+        $stmt = $pdo->prepare('SELECT * FROM project_columns WHERE id = ? AND table_id = ? LIMIT 1');
+        $stmt->execute([$params->column_id, $table['id']]);
+        $column = $stmt->fetch();
+
+        if (!$column) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Column not found']);
+        }
+
+        $newName = array_key_exists('name', $body) ? trim((string) $body['name']) : $column['name'];
+        $error   = self::validateIdentifier($newName, 'name');
+        if ($error) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if ($newName === 'id') {
+            return $res->setStatusCode(422)->withJson(['error' => "name cannot be 'id'"]);
+        }
+
+        if ($newName !== $column['name']) {
+            $stmt = $pdo->prepare('SELECT id FROM project_columns WHERE table_id = ? AND name = ? AND id != ? LIMIT 1');
+            $stmt->execute([$table['id'], $newName, $column['id']]);
+            if ($stmt->fetch()) {
+                return $res->setStatusCode(409)->withJson(['error' => 'Column name already exists on this table']);
+            }
+        }
+
+        $newType = $body['type'] ?? $column['type'];
+        if (!in_array($newType, self::VALID_TYPES, true)) {
+            return $res->setStatusCode(422)->withJson(['error' => 'type must be one of: ' . implode(', ', self::VALID_TYPES)]);
+        }
+
+        $newNullable = array_key_exists('nullable', $body) ? (bool) $body['nullable'] : (bool) $column['nullable'];
+        $newDefault  = array_key_exists('default_value', $body) ? $body['default_value'] : $column['default_value'];
+
+        $newCol = ['name' => $newName, 'type' => $newType, 'nullable' => $newNullable, 'default_value' => $newDefault];
+
+        // DDL first: nothing has changed yet if it fails, so there's no metadata to roll back.
+        try {
+            $pdo->exec(
+                'ALTER TABLE `' . $table['physical_name'] . '` CHANGE COLUMN `' . $column['name'] . '` '
+                . self::columnDefinitionSql($pdo, $newCol)
+            );
+        } catch (\Throwable $e) {
+            return $res->setStatusCode(500)->withJson(['error' => 'Failed to alter column: ' . $e->getMessage()]);
+        }
+
+        $pdo->prepare(
+            'UPDATE project_columns SET name = ?, type = ?, nullable = ?, default_value = ? WHERE id = ?'
+        )->execute([$newName, $newType, (int) $newNullable, $newDefault, $column['id']]);
+
+        return $res->withJson([
+            'id'            => (int) $column['id'],
+            'name'          => $newName,
+            'type'          => $newType,
+            'nullable'      => $newNullable,
+            'default_value' => $newDefault,
+            'position'      => (int) $column['position'],
+        ]);
+    }
+
+    /** Removes a column. Destructive — requires `?confirm=true`. */
+    public static function destroyColumn(Request $req, Response $res, stdClass $params): Response
+    {
+        $pdo   = Database::getConn('default');
+        $table = self::findOwnedTable($pdo, $params->project_id, $params->table_id, $params->user['id']);
+
+        if (!$table) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
+        }
+
+        $stmt = $pdo->prepare('SELECT id, name FROM project_columns WHERE id = ? AND table_id = ? LIMIT 1');
+        $stmt->execute([$params->column_id, $table['id']]);
+        $column = $stmt->fetch();
+
+        if (!$column) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Column not found']);
+        }
+
+        if (($req->getQueryParams()['confirm'] ?? null) !== 'true') {
+            return $res->setStatusCode(422)->withJson([
+                'error' => 'Removing a column drops its data irreversibly. Pass ?confirm=true to proceed.',
+            ]);
+        }
+
+        // DDL first: nothing has changed yet if it fails, so there's no metadata to roll back.
+        try {
+            $pdo->exec('ALTER TABLE `' . $table['physical_name'] . '` DROP COLUMN `' . $column['name'] . '`');
+        } catch (\Throwable $e) {
+            return $res->setStatusCode(500)->withJson(['error' => 'Failed to drop column: ' . $e->getMessage()]);
+        }
+
+        $pdo->prepare('DELETE FROM project_columns WHERE id = ?')->execute([$column['id']]);
+
+        return $res->setStatusCode(204);
+    }
+
     /** @param array<int, array{name: string, type: string, nullable?: bool, default_value?: mixed}> $columns */
     private static function buildCreateTableSql(\PDO $pdo, string $physicalName, array $columns): string
     {
@@ -256,5 +481,43 @@ class Tables
         );
         $stmt->execute([$projectId, $userId]);
         return $stmt->fetch();
+    }
+
+    /**
+     * A table owned (transitively, via its project) by $userId, with its
+     * physical table name pre-computed as `physical_name`.
+     */
+    private static function findOwnedTable(\PDO $pdo, mixed $projectId, mixed $tableId, int $userId): array|false
+    {
+        $stmt = $pdo->prepare(
+            'SELECT t.id, t.project_id, t.name FROM project_tables t
+             INNER JOIN projects p ON p.id = t.project_id
+             WHERE t.id = ? AND t.project_id = ? AND p.user_id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$tableId, $projectId, $userId]);
+        $table = $stmt->fetch();
+
+        if (!$table) {
+            return false;
+        }
+
+        $table['physical_name'] = self::physicalName((int) $table['project_id'], $table['name']);
+
+        return $table;
+    }
+
+    /** @return string|null An error message, or null if $name is a valid identifier. */
+    private static function validateIdentifier(string $name, string $field): ?string
+    {
+        if ($name === '') {
+            return "{$field} is required";
+        }
+
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $name)) {
+            return "{$field} must be a valid identifier";
+        }
+
+        return null;
     }
 }

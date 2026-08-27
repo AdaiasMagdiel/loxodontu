@@ -17,6 +17,7 @@ This is where the project is heading — in rough priority order. Nothing here i
 - **REST passthrough** — per-project REST API via `pdo-restify`, with token-based auth and permission scopes (select/insert/update/delete).
 - **RLS (Row-Level Security)** — column-value conditions per operation per table, managed via the API and enforced transparently at the REST layer. Policies can be scoped to an end-user role and reference the caller via `$auth.id` / `$auth.email` / `$auth.role` placeholders (e.g. "a manager can only update their own rows; an admin can do anything").
 - **Project-level auth** — a project's own end users can register/login/logout (separate from platform users), authenticated via `X-User-Token` on REST passthrough requests. Roles are assigned by the project owner and feed RLS policies.
+- **Schema alterations** — tables and columns can be changed after creation: rename a table, add a column, rename a column, change a column's type/nullability/default. Column removal is destructive and requires `?confirm=true`.
 
 ### Next
 
@@ -25,12 +26,88 @@ This is where the project is heading — in rough priority order. Nothing here i
 ### Later
 
 - **Storage** — file upload and retrieval per project. Likely local filesystem first, with a path toward S3-compatible backends.
-- **Migrations / schema history** — track column changes over time, non-destructive alterations.
+- **Schema history** — track column/table changes over time (who changed what, when), on top of the alteration endpoints that already exist.
 
 ### Someday (if it makes sense)
 
 - **Realtime** — long-polling or SSE for table change events.
 - **Edge functions** — lightweight PHP scripts executed per-request within project scope.
+
+## API Overview
+
+Everything lives under `/api/v1`. Platform routes (managing your own account, projects, tables,
+keys, RLS policies, and end users) are authenticated with `Authorization: Bearer <platform token>`
+from `/auth/login`. REST passthrough routes are authenticated with a project API key instead, plus
+an optional end-user token — see below.
+
+### Platform auth
+
+| Method | Route            | Auth | Description                  |
+| ------ | ---------------- | ---- | ---------------------------- |
+| POST   | `/auth/register` | —    | Create a platform account    |
+| POST   | `/auth/login`    | —    | Get a platform token         |
+| POST   | `/auth/logout`   | ✓    | Invalidate the current token |
+
+### Projects
+
+| Method | Route              | Description                          |
+| ------ | ------------------ | ------------------------------------- |
+| GET    | `/projects`        | List your projects                    |
+| POST   | `/projects`        | Create a project (`{ name }`)         |
+| GET    | `/projects/{id}`   | Get a project, with its tables        |
+| DELETE | `/projects/{id}`   | Delete a project                      |
+
+### Tables & schema alterations
+
+| Method | Route                                        | Description                                                                 |
+| ------ | --------------------------------------------- | ---------------------------------------------------------------------------- |
+| GET    | `/projects/{id}/tables`                       | List tables, with their columns                                              |
+| POST   | `/projects/{id}/tables`                       | Create a table (`{ name, columns: [...] }`)                                  |
+| PATCH  | `/projects/{id}/tables/{table_id}`            | Rename a table (`{ name }`) — renames the physical table too                 |
+| DELETE | `/projects/{id}/tables/{table_id}`            | Drop a table                                                                  |
+| POST   | `/projects/{id}/tables/{table_id}/columns`    | Add a column (`{ name, type, nullable?, default_value? }`)                   |
+| PATCH  | `/projects/{id}/tables/{table_id}/columns/{column_id}` | Rename a column and/or change its type/nullable/default (any subset) |
+| DELETE | `/projects/{id}/tables/{table_id}/columns/{column_id}?confirm=true` | Drop a column — irreversible, so `?confirm=true` is required  |
+
+Column `type` is one of `text`, `integer`, `decimal`, `boolean`, `timestamp`, `json`. A column can
+never be named `id`, which is always the auto-incrementing primary key.
+
+### API keys & RLS policies
+
+| Method | Route                                                        | Description                                          |
+| ------ | -------------------------------------------------------------| ------------------------------------------------------ |
+| GET    | `/projects/{id}/keys`                                        | List a project's API keys                              |
+| POST   | `/projects/{id}/keys`                                        | Create a key (`{ name, permissions: [...], expires_at? }`) |
+| DELETE | `/projects/{id}/keys/{key_id}`                                | Revoke a key                                            |
+| GET    | `/projects/{id}/tables/{table_id}/rls-policies`               | List a table's RLS policies                             |
+| POST   | `/projects/{id}/tables/{table_id}/rls-policies`               | Create a policy (`{ name, operation, role?, conditions, enabled? }`) |
+| DELETE | `/projects/{id}/tables/{table_id}/rls-policies/{policy_id}`   | Delete a policy                                         |
+
+`permissions` is a subset of `select`, `insert`, `update`, `delete`. `operation` is one of `SELECT`,
+`INSERT`, `UPDATE`, `DELETE`, `ALL`. `conditions` is a `column => value` object where a value can be
+a literal or one of the placeholders `$auth.id`, `$auth.email`, `$auth.role`.
+
+### End users (a project's own app users)
+
+| Method | Route                                          | Auth              | Description                          |
+| ------ | ------------------------------------------------| ------------------ | -------------------------------------- |
+| POST   | `/{project_id}/auth/register`                   | —                  | Register an end user (`{ email, password }`) |
+| POST   | `/{project_id}/auth/login`                      | —                  | Get an end-user token                  |
+| POST   | `/{project_id}/auth/logout`                     | end-user token     | Invalidate the current end-user token  |
+| GET    | `/projects/{id}/end-users`                      | platform token     | List a project's end users             |
+| PATCH  | `/projects/{id}/end-users/{end_user_id}`        | platform token     | Grant/clear a role (`{ role }`, `null` clears it) |
+| DELETE | `/projects/{id}/end-users/{end_user_id}`        | platform token     | Remove an end user                     |
+
+### REST passthrough
+
+| Method              | Route                              | Description                          |
+| --------------------| -------------------------------------| --------------------------------------|
+| GET/POST/PATCH/DELETE | `/{project_id}/rest/{table}`       | List/insert/bulk-update/bulk-delete   |
+| GET/PATCH/PUT/DELETE  | `/{project_id}/rest/{table}/{id}`  | Get/update/delete a single row        |
+
+Authenticated with `Authorization: Bearer <project API key>`, gated by that key's `permissions`.
+Add `X-User-Token: <end-user token>` to authenticate as an end user for RLS purposes — omitting it
+means an anonymous caller, for which any RLS condition referencing `$auth.*` never matches.
 
 ## Testing
 
