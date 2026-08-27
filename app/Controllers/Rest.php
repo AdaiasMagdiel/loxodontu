@@ -7,6 +7,7 @@ use AdaiasMagdiel\Erlenmeyer\Response as ErlResponse;
 use AdaiasMagdiel\PdoRestify\Api;
 use AdaiasMagdiel\PdoRestify\Http\Request as RestRequest;
 use AdaiasMagdiel\PdoRestify\Operation;
+use AdaiasMagdiel\PdoRestify\QueryBuilder;
 use AdaiasMagdiel\PdoRestify\Resource;
 use App\Database;
 use stdClass;
@@ -81,38 +82,106 @@ class Rest
             array_unshift($columns, 'id');
         }
 
+        $auth = self::resolveAuth($pdo, $req, $projectId);
+
         $stmt = $pdo->prepare(
-            'SELECT operation, expression FROM project_rls_policies
+            'SELECT role, operation, expression FROM project_rls_policies
              WHERE table_id = ? AND enabled = 1'
         );
         $stmt->execute([$projectTable['id']]);
         $rlsPolicies = $stmt->fetchAll();
 
-        $policyConditions = ['select' => [], 'insert' => [], 'update' => [], 'delete' => []];
-
+        // Bucket every policy under each operation it applies to ('all' fans out to all four).
+        $byOperation = ['select' => [], 'insert' => [], 'update' => [], 'delete' => []];
         foreach ($rlsPolicies as $policy) {
-            $op         = strtolower($policy['operation']);
-            $conditions = json_decode($policy['expression'], true) ?? [];
+            $op  = strtolower($policy['operation']);
+            $ops = $op === 'all' ? array_keys($byOperation) : [$op];
 
-            if ($op === 'all') {
-                foreach ($policyConditions as &$conds) {
-                    $conds = array_merge($conds, $conditions);
+            foreach ($ops as $o) {
+                if (isset($byOperation[$o])) {
+                    $byOperation[$o][] = $policy;
                 }
-                unset($conds);
-            } elseif (isset($policyConditions[$op])) {
-                $policyConditions[$op] = array_merge($policyConditions[$op], $conditions);
             }
         }
 
-        $resource = (new Resource($table))->columns($columns);
+        // No policies at all for an operation => open (pre-RLS behavior).
+        // Policies exist but none match the caller's role => deny entirely.
+        // Otherwise, merge the conditions of every applicable policy; any
+        // applicable policy with no conditions makes the whole operation open.
+        $policyConditions = [];
+        foreach ($byOperation as $op => $policies) {
+            if ($policies === []) {
+                $policyConditions[$op] = [];
+                continue;
+            }
+
+            $applicable = array_filter(
+                $policies,
+                fn(array $p): bool => $p['role'] === null || ($auth !== null && $p['role'] === $auth['role']),
+            );
+
+            if ($applicable === []) {
+                $policyConditions[$op] = null; // sentinel: deny
+                continue;
+            }
+
+            $merged = [];
+            foreach ($applicable as $p) {
+                $conditions = json_decode($p['expression'], true) ?? [];
+
+                if ($conditions === []) {
+                    $merged = [];
+                    break; // an unconditional applicable policy makes this operation fully open
+                }
+
+                foreach ($conditions as $column => $value) {
+                    $merged[$column] = self::resolvePlaceholder($value, $auth);
+                }
+            }
+
+            $policyConditions[$op] = $merged;
+        }
+
+        $physicalTable = Tables::physicalName((int) $projectId, $table);
+        $resource      = (new Resource($physicalTable))->columns($columns);
 
         foreach (Operation::cases() as $op) {
             $frozen = $policyConditions[$op->value];
+
+            if ($frozen === null) {
+                continue; // not allow()-ed => pdo-restify denies with 403 if the client attempts it
+            }
+
             $resource->allow($op, fn(array $ctx) => $frozen);
         }
 
+        // pdo-restify's update()/delete() re-fetch the row via the SELECT policy to build
+        // their response/404, not the UPDATE/DELETE policy — so when SELECT is public but
+        // UPDATE/DELETE is owner-scoped (a very normal RLS setup), a write blocked by RLS
+        // still comes back 200 with the untouched row instead of 404. Pre-check visibility
+        // under the actual write policy ourselves so a denied write fails honestly.
+        if (in_array($method, ['PATCH', 'PUT', 'DELETE'], true) && isset($params->id)) {
+            $writeOp         = $method === 'DELETE' ? 'delete' : 'update';
+            $writeConditions = $policyConditions[$writeOp];
+
+            if ($writeConditions !== null) {
+                $checkConditions = $writeConditions;
+                $checkConditions['id'] = $params->id;
+
+                [$checkSql, $checkParams] = QueryBuilder::select($physicalTable, ['id'], [], $checkConditions, null, 1, 0);
+                $checkStmt = $pdo->prepare($checkSql);
+                $checkStmt->execute($checkParams);
+
+                if ($checkStmt->fetch() === false) {
+                    return $res->setStatusCode(404)->withJson([
+                        'error' => "Resource '{$table}' with id '{$params->id}' not found",
+                    ]);
+                }
+            }
+        }
+
         $api  = (new Api($pdo))->register($resource);
-        $path = $table . (isset($params->id) ? '/' . $params->id : '');
+        $path = $physicalTable . (isset($params->id) ? '/' . $params->id : '');
 
         try {
             $body = $req->getJson() ?? [];
@@ -151,5 +220,48 @@ class Rest
         }
 
         return substr($header, 7);
+    }
+
+    /**
+     * Resolves the end user authenticated via the `X-User-Token` header (separate
+     * from the project API key in Authorization, which only gates the request at
+     * the project level). Returns null for anonymous requests — RLS conditions
+     * referencing $auth.* then resolve to NULL, which never matches a row.
+     *
+     * @return array{id: int, email: string, role: ?string}|null
+     */
+    private static function resolveAuth(\PDO $pdo, ErlRequest $req, mixed $projectId): ?array
+    {
+        $token = $req->getHeader('X-User-Token') ?? '';
+
+        if ($token === '') {
+            return null;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT u.id, u.email, u.role
+             FROM project_end_user_tokens t
+             JOIN project_end_users u ON u.id = t.end_user_id
+             WHERE t.token_hash = ? AND t.expires_at > NOW() AND u.project_id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([hash('sha256', $token), $projectId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            return null;
+        }
+
+        return ['id' => (int) $user['id'], 'email' => $user['email'], 'role' => $user['role']];
+    }
+
+    /** @param array{id: int, email: string, role: ?string}|null $auth */
+    private static function resolvePlaceholder(mixed $value, ?array $auth): mixed
+    {
+        if (!is_string($value) || !str_starts_with($value, '$auth.')) {
+            return $value;
+        }
+
+        return $auth[substr($value, 6)] ?? null;
     }
 }

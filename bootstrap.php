@@ -7,8 +7,11 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 Dotenv::createImmutable(__DIR__)->safeLoad();
 
-$databaseDevMode = env('DB_MODE') === 'development';
-$suffix = $databaseDevMode ? 'DEV' : 'PROD';
+$suffix = match (env('DB_MODE')) {
+    'development' => 'DEV',
+    'testing'     => 'TEST',
+    default       => 'PROD',
+};
 
 Database::configure('default', 'mysql', [
     'host' => env("DB_HOST_$suffix"),

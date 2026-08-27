@@ -25,5 +25,24 @@
     }
   ],
   "minimum-stability": "dev",
-  "prefer-stable": true
+  "prefer-stable": true,
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  },
+  "require-dev": {
+    "pestphp/pest": "^3.7"
+  },
+  "scripts": {
+    "test:setup": "php tests/setup-db.php",
+    "test": [
+      "@test:setup",
+      "pest"
+    ],
+    "test:coverage": [
+      "@test:setup",
+      "pest --coverage --min=90"
+    ]
+  }
 }
