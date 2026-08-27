@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
+use App\Pagination;
 use stdClass;
 
 /**
@@ -118,12 +119,22 @@ class EndUsers
             return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
         }
 
+        ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
+
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM project_end_users WHERE project_id = ?');
+        $countStmt->execute([$project['id']]);
+        $total = (int) $countStmt->fetchColumn();
+
         $stmt = $pdo->prepare(
-            'SELECT id, email, role, created_at FROM project_end_users WHERE project_id = ? ORDER BY created_at DESC'
+            "SELECT id, email, role, created_at FROM project_end_users WHERE project_id = ? ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$project['id']]);
 
-        return $res->withJson($stmt->fetchAll());
+        return $res
+            ->setHeader('X-Total-Count', (string) $total)
+            ->setHeader('X-Page-Limit', (string) $limit)
+            ->setHeader('X-Page-Offset', (string) $offset)
+            ->withJson($stmt->fetchAll());
     }
 
     /** Sets an end user's role (e.g. "manager", "admin"). Platform-owner only. */

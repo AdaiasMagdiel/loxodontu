@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
+use App\Pagination;
 use stdClass;
 
 class Tables
@@ -39,8 +40,14 @@ class Tables
             return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
         }
 
+        ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
+
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM project_tables WHERE project_id = ?');
+        $countStmt->execute([$project['id']]);
+        $total = (int) $countStmt->fetchColumn();
+
         $stmt = $pdo->prepare(
-            'SELECT id, name, created_at FROM project_tables WHERE project_id = ? ORDER BY name'
+            "SELECT id, name, created_at FROM project_tables WHERE project_id = ? ORDER BY name LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$project['id']]);
         $tables = $stmt->fetchAll();
@@ -63,7 +70,11 @@ class Tables
         }
         unset($table);
 
-        return $res->withJson($tables);
+        return $res
+            ->setHeader('X-Total-Count', (string) $total)
+            ->setHeader('X-Page-Limit', (string) $limit)
+            ->setHeader('X-Page-Offset', (string) $offset)
+            ->withJson($tables);
     }
 
     public static function store(Request $req, Response $res, stdClass $params): Response

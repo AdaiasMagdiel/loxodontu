@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
+use App\Pagination;
 use stdClass;
 
 class RlsPolicies
@@ -21,9 +22,15 @@ class RlsPolicies
             return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
         }
 
+        ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
+
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM project_rls_policies WHERE table_id = ?');
+        $countStmt->execute([$table['id']]);
+        $total = (int) $countStmt->fetchColumn();
+
         $stmt = $pdo->prepare(
-            'SELECT id, name, role, operation, expression, enabled, created_at, updated_at
-             FROM project_rls_policies WHERE table_id = ? ORDER BY created_at DESC'
+            "SELECT id, name, role, operation, expression, enabled, created_at, updated_at
+             FROM project_rls_policies WHERE table_id = ? ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$table['id']]);
         $policies = $stmt->fetchAll();
@@ -34,7 +41,11 @@ class RlsPolicies
         }
         unset($policy);
 
-        return $res->withJson($policies);
+        return $res
+            ->setHeader('X-Total-Count', (string) $total)
+            ->setHeader('X-Page-Limit', (string) $limit)
+            ->setHeader('X-Page-Offset', (string) $offset)
+            ->withJson($policies);
     }
 
     public static function store(Request $req, Response $res, stdClass $params): Response

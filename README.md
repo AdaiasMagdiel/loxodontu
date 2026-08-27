@@ -42,6 +42,11 @@ keys, RLS policies, and end users) are authenticated with `Authorization: Bearer
 from `/auth/login`. REST passthrough routes are authenticated with a project API key instead, plus
 an optional end-user token — see below.
 
+Every list endpoint below (tables, keys, RLS policies, end users) is paginated the same way REST
+passthrough's own `GET` list endpoint is: `?limit=` (default 25, capped at 100) and `?offset=`
+(default 0), with the result's total/limit/offset echoed back as `X-Total-Count`, `X-Page-Limit`,
+and `X-Page-Offset` response headers.
+
 ### Platform auth
 
 | Method | Route            | Auth | Description                  |

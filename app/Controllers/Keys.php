@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
+use App\Pagination;
 use stdClass;
 
 class Keys
@@ -20,9 +21,15 @@ class Keys
             return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
         }
 
+        ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
+
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM project_api_keys WHERE project_id = ?');
+        $countStmt->execute([$project['id']]);
+        $total = (int) $countStmt->fetchColumn();
+
         $stmt = $pdo->prepare(
-            'SELECT id, name, key_prefix, permissions, last_used_at, expires_at, created_at
-             FROM project_api_keys WHERE project_id = ? ORDER BY created_at DESC'
+            "SELECT id, name, key_prefix, permissions, last_used_at, expires_at, created_at
+             FROM project_api_keys WHERE project_id = ? ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$project['id']]);
         $keys = $stmt->fetchAll();
@@ -32,7 +39,11 @@ class Keys
         }
         unset($key);
 
-        return $res->withJson($keys);
+        return $res
+            ->setHeader('X-Total-Count', (string) $total)
+            ->setHeader('X-Page-Limit', (string) $limit)
+            ->setHeader('X-Page-Offset', (string) $offset)
+            ->withJson($keys);
     }
 
     public static function store(Request $req, Response $res, stdClass $params): Response
