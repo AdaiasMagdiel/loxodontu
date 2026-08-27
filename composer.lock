@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3ccb8beb23e5a8fb3aa15c6e1764a44c",
+    "content-hash": "b902acbc47417aa13bc1b6347bc0aa1a",
     "packages": [
         {
             "name": "adaiasmagdiel/erlenmeyer",
@@ -99,6 +99,54 @@
                 "source": "https://github.com/AdaiasMagdiel/fullcrawl/tree/v1.2.1"
             },
             "time": "2026-01-18T23:58:32+00:00"
+        },
+        {
+            "name": "adaiasmagdiel/pdo-restify",
+            "version": "v0.3.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/AdaiasMagdiel/pdo-restify.git",
+                "reference": "da0064abbe92564a44482635ca62570ab4782e40"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/AdaiasMagdiel/pdo-restify/zipball/da0064abbe92564a44482635ca62570ab4782e40",
+                "reference": "da0064abbe92564a44482635ca62570ab4782e40",
+                "shasum": ""
+            },
+            "require": {
+                "ext-pdo": "*",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "ext-pdo_sqlite": "*",
+                "pestphp/pest": "^2.34"
+            },
+            "suggest": {
+                "adaiasmagdiel/erlenmeyer": "A minimal front controller you can use to expose pdo-restify over HTTP"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "AdaiasMagdiel\\PdoRestify\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "LGPL-3.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Adaias Magdiel",
+                    "email": "eu@adaiasmagdiel.com"
+                }
+            ],
+            "description": "A framework-agnostic REST API layer on top of PDO, for MySQL, MariaDB and SQLite.",
+            "support": {
+                "issues": "https://github.com/AdaiasMagdiel/pdo-restify/issues",
+                "source": "https://github.com/AdaiasMagdiel/pdo-restify/tree/v0.3.1"
+            },
+            "time": "2026-08-27T03:36:51+00:00"
         },
         {
             "name": "graham-campbell/result-type",
@@ -576,9 +624,9 @@
     ],
     "packages-dev": [],
     "aliases": [],
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "stability-flags": {},
-    "prefer-stable": false,
+    "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
