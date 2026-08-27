@@ -9,7 +9,7 @@ return [
                 `name`         VARCHAR(255) NOT NULL,
                 `key_prefix`   VARCHAR(8) NOT NULL,
                 `key_hash`     VARCHAR(255) NOT NULL,
-                `permissions`  TEXT NOT NULL DEFAULT '[]',
+                `permissions`  VARCHAR(255) NOT NULL DEFAULT '[]',
                 `last_used_at` TIMESTAMP NULL DEFAULT NULL,
                 `expires_at`   TIMESTAMP NULL DEFAULT NULL,
                 `created_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
