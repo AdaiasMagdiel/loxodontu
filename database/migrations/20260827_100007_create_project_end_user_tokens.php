@@ -7,7 +7,7 @@ return [
                 `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 `end_user_id` BIGINT UNSIGNED NOT NULL,
                 `token_hash`  VARCHAR(64) NOT NULL,
-                `expires_at`  TIMESTAMP NOT NULL,
+                `expires_at`  DATETIME NOT NULL,
                 `created_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 KEY `project_end_user_tokens_hash_idx` (`token_hash`),

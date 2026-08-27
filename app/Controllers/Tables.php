@@ -17,7 +17,7 @@ class Tables
         'integer'   => 'BIGINT',
         'decimal'   => 'DECIMAL(18,4)',
         'boolean'   => 'TINYINT(1)',
-        'timestamp' => 'TIMESTAMP',
+        'timestamp' => 'DATETIME', // not TIMESTAMP: MySQL's TIMESTAMP tops out at 2038-01-19 (32-bit Unix time)
         'json'      => 'JSON',
     ];
 

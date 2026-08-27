@@ -7,7 +7,7 @@ return [
                 `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 `user_id`    BIGINT UNSIGNED NOT NULL,
                 `token_hash` VARCHAR(64) NOT NULL,
-                `expires_at` TIMESTAMP NOT NULL,
+                `expires_at` DATETIME NOT NULL,
                 `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 KEY `platform_auth_tokens_hash_idx` (`token_hash`),

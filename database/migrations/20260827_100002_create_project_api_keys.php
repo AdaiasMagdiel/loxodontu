@@ -11,7 +11,7 @@ return [
                 `key_hash`     VARCHAR(255) NOT NULL,
                 `permissions`  VARCHAR(255) NOT NULL DEFAULT '[]',
                 `last_used_at` TIMESTAMP NULL DEFAULT NULL,
-                `expires_at`   TIMESTAMP NULL DEFAULT NULL,
+                `expires_at`   DATETIME NULL DEFAULT NULL,
                 `created_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 CONSTRAINT `fk_api_keys_project_id`
