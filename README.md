@@ -31,7 +31,6 @@ This is where the project is heading — in rough priority order. Nothing here i
 
 - **Realtime** — long-polling or SSE for table change events.
 - **Edge functions** — lightweight PHP scripts executed per-request within project scope.
-- **Multi-database backends** — PostgreSQL support. The core is MySQL/MariaDB-first and will stay that way.
 
 ## License
 
