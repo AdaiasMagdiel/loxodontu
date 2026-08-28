@@ -86,6 +86,69 @@ test('a user cannot delete another user\'s project', function () {
     expect($stillThere->getStatusCode())->toBe(200);
 });
 
+test('updates a project\'s name', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token'], 'Old Name');
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['name' => 'New Name'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect(json($response)['name'])->toBe('New Name');
+});
+
+test('updates a project\'s description', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['description' => 'A new description'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect(json($response)['description'])->toBe('A new description');
+});
+
+test('rejects updating a project\'s name to an empty string', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['name' => '  '],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('rejects a project update with nothing to update', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => [],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('404s updating a project the caller does not own', function () {
+    $owner = registerPlatformUser();
+    $intruder = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}", [
+        'headers' => ['Authorization' => "Bearer {$intruder['token']}"],
+        'json'    => ['name' => 'Hijacked'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(404);
+});
+
 test('deletes an owned project', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);

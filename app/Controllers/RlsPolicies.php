@@ -114,14 +114,12 @@ class RlsPolicies
                     }
                 }
             } else {
-                // Scalar condition (implicit eq)
+                // Scalar condition (implicit eq) — anything non-array decoded from JSON
+                // is already a scalar or null, so there's nothing else to validate here.
                 if (is_string($value) && str_starts_with($value, '$auth.') && !in_array($value, self::VALID_PLACEHOLDERS, true)) {
                     return $res->setStatusCode(422)->withJson([
                         'error' => "invalid placeholder '{$value}' for conditions.{$column}; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
                     ]);
-                }
-                if (!is_scalar($value) && $value !== null) {
-                    return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column} must be a scalar value, placeholder, or operator object"]);
                 }
             }
         }

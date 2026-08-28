@@ -140,6 +140,38 @@ test('an admin can update and delete anyone\'s post', function () {
     expect($delete->getStatusCode())->toBe(204);
 });
 
+test('operator-style conditions resolve $auth placeholders just like scalar ones', function () {
+    [$ownerToken, $project, $table] = postsTableForRls();
+    $key = createApiKey($ownerToken, $project['id'], ['select', 'insert', 'update']);
+    $fx  = ['project' => $project, 'key' => $key];
+
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'conditions' => []]);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], [
+        'operation' => 'INSERT', 'role' => 'manager', 'conditions' => ['created_by' => '$auth.id'],
+    ]);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], [
+        'operation' => 'UPDATE', 'role' => 'manager',
+        'conditions' => [
+            'created_by' => ['op' => 'eq', 'value' => '$auth.id'],
+            'title'      => ['op' => 'is_not_null'],
+        ],
+    ]);
+
+    $managerA = registerEndUser($project['id']);
+    setEndUserRole($ownerToken, $project['id'], $managerA['user']['id'], 'manager');
+    $managerB = registerEndUser($project['id']);
+    setEndUserRole($ownerToken, $project['id'], $managerB['user']['id'], 'manager');
+
+    $post = json(restRequest('POST', $fx, '', $managerA['token'], ['title' => 'original']));
+
+    $ownUpdate = restRequest('PATCH', $fx, "/{$post['id']}", $managerA['token'], ['title' => 'edited']);
+    expect($ownUpdate->getStatusCode())->toBe(200);
+    expect(json($ownUpdate)['title'])->toBe('edited');
+
+    $hijack = restRequest('PATCH', $fx, "/{$post['id']}", $managerB['token'], ['title' => 'hijacked']);
+    expect($hijack->getStatusCode())->toBe(404);
+});
+
 test('an admin can insert without needing created_by scoping', function () {
     $fx = rlsBlogFixture();
 

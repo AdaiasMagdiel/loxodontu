@@ -80,6 +80,84 @@ test('rejects a non-array conditions field', function () {
     expect($response->getStatusCode())->toBe(422);
 });
 
+test('creates a policy with an operator condition and a scalar value', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $policy = createRlsPolicy($token, $project['id'], $table['id'], [
+        'operation' => 'SELECT',
+        'conditions' => ['created_by' => ['op' => 'gt', 'value' => 5]],
+    ]);
+
+    expect($policy['conditions'])->toBe(['created_by' => ['op' => 'gt', 'value' => 5]]);
+});
+
+test('creates a policy with an operator condition and a placeholder value', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $policy = createRlsPolicy($token, $project['id'], $table['id'], [
+        'operation' => 'UPDATE',
+        'role' => 'manager',
+        'conditions' => ['created_by' => ['op' => 'eq', 'value' => '$auth.id']],
+    ]);
+
+    expect($policy['conditions'])->toBe(['created_by' => ['op' => 'eq', 'value' => '$auth.id']]);
+});
+
+test('creates a policy with a no-value operator condition', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $policy = createRlsPolicy($token, $project['id'], $table['id'], [
+        'operation' => 'SELECT',
+        'conditions' => ['created_by' => ['op' => 'is_null']],
+    ]);
+
+    expect($policy['conditions'])->toBe(['created_by' => ['op' => 'is_null']]);
+});
+
+test('rejects an operator condition with an invalid op', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/tables/{$table['id']}/rls-policies", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => ['name' => 'p', 'operation' => 'SELECT', 'conditions' => ['created_by' => ['op' => 'bogus']]],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('rejects an operator condition missing a required value', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/tables/{$table['id']}/rls-policies", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => ['name' => 'p', 'operation' => 'SELECT', 'conditions' => ['created_by' => ['op' => 'gt']]],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('rejects an operator condition with an invalid placeholder value', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/tables/{$table['id']}/rls-policies", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => ['name' => 'p', 'operation' => 'SELECT', 'conditions' => ['created_by' => ['op' => 'eq', 'value' => '$auth.password']]],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('rejects an operator condition with a non-scalar value', function () {
+    [$token, $project, $table] = postsTableForRls();
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/tables/{$table['id']}/rls-policies", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => ['name' => 'p', 'operation' => 'SELECT', 'conditions' => ['created_by' => ['op' => 'eq', 'value' => ['nested' => 'array']]]],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
 test('rejects a non-scalar condition value', function () {
     [$token, $project, $table] = postsTableForRls();
 
