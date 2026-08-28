@@ -10,8 +10,9 @@ use stdClass;
 
 class RlsPolicies
 {
-    private const VALID_OPERATIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
+    private const VALID_OPERATIONS   = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
     private const VALID_PLACEHOLDERS = ['$auth.id', '$auth.email', '$auth.role'];
+    private const VALID_OPS          = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'];
 
     public static function index(Request $req, Response $res, stdClass $params): Response
     {
@@ -89,13 +90,40 @@ class RlsPolicies
             if (!in_array($column, $columns, true)) {
                 return $res->setStatusCode(422)->withJson(['error' => "unknown column in conditions: {$column}"]);
             }
-            if (is_string($value) && str_starts_with($value, '$auth.') && !in_array($value, self::VALID_PLACEHOLDERS, true)) {
-                return $res->setStatusCode(422)->withJson([
-                    'error' => "invalid placeholder '{$value}' for conditions.{$column}; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
-                ]);
-            }
-            if (!is_scalar($value) && $value !== null) {
-                return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column} must be a scalar value or placeholder"]);
+
+            if (is_array($value)) {
+                // Operator condition: { "op": "gt", "value": 5 } or { "op": "is_null" }
+                $op = $value['op'] ?? null;
+                if (!is_string($op) || !in_array($op, self::VALID_OPS, true)) {
+                    return $res->setStatusCode(422)->withJson([
+                        'error' => "conditions.{$column}.op must be one of: " . implode(', ', self::VALID_OPS),
+                    ]);
+                }
+                $noValueOps = ['is_null', 'is_not_null'];
+                if (!in_array($op, $noValueOps, true)) {
+                    if (!array_key_exists('value', $value)) {
+                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value is required for op '{$op}'"]);
+                    }
+                    $val = $value['value'];
+                    if (is_string($val) && str_starts_with($val, '$auth.') && !in_array($val, self::VALID_PLACEHOLDERS, true)) {
+                        return $res->setStatusCode(422)->withJson([
+                            'error' => "invalid placeholder '{$val}' for conditions.{$column}.value; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
+                        ]);
+                    }
+                    if (!is_scalar($val) && $val !== null) {
+                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value must be a scalar or placeholder"]);
+                    }
+                }
+            } else {
+                // Scalar condition (implicit eq)
+                if (is_string($value) && str_starts_with($value, '$auth.') && !in_array($value, self::VALID_PLACEHOLDERS, true)) {
+                    return $res->setStatusCode(422)->withJson([
+                        'error' => "invalid placeholder '{$value}' for conditions.{$column}; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
+                    ]);
+                }
+                if (!is_scalar($value) && $value !== null) {
+                    return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column} must be a scalar value, placeholder, or operator object"]);
+                }
             }
         }
 

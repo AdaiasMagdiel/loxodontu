@@ -134,6 +134,12 @@ $projectNavItems = [
                 </svg>
                 Projects
             </a>
+            <a href="/dashboard/account" class="nav-link <?= $activeNav === 'account' ? 'active' : '' ?>">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.121 17.804A9 9 0 1118.88 6.196M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Account
+            </a>
 
             <?php if ($projectId): ?>
                 <span class="nav-section-label">Project</span>

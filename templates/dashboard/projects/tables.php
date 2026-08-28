@@ -99,8 +99,10 @@ ob_start();
                             <div v-for="pol in ui(table.id).policies" :key="pol.id" class="flex items-center justify-between px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
                                 <div class="text-xs font-mono" style="color:var(--text-main);">
                                     <span class="font-head font-medium uppercase">{{ pol.operation }}</span>
-                                    <span style="color:var(--text-muted);"> · role: {{ pol.role || 'any' }} · </span>
-                                    <span style="color:var(--text-muted);">{{ JSON.stringify(pol.conditions) }}</span>
+                                    <span v-if="pol.role" style="color:var(--text-muted);"> · role: {{ pol.role }}</span>
+                                    <span v-if="pol.name" style="color:var(--text-muted);"> · {{ pol.name }}</span>
+                                    <span v-if="Object.keys(pol.conditions).length" style="color:var(--text-muted);"> · {{ formatConditions(pol.conditions) }}</span>
+                                    <span v-else style="color:var(--text-muted);"> · unrestricted</span>
                                 </div>
                                 <button class="btn-ghost-danger" @click="deletePolicy(table, pol)">Delete</button>
                             </div>
@@ -116,25 +118,37 @@ ob_start();
                                 <select v-model="row.column" class="input w-28">
                                     <option v-for="c in tableColumnNames(table)" :key="c" :value="c">{{ c }}</option>
                                 </select>
-                                <select v-model="row.valueType" class="input w-28">
-                                    <option value="placeholder">placeholder</option>
-                                    <option value="string">string</option>
-                                    <option value="number">number</option>
-                                    <option value="boolean">boolean</option>
-                                    <option value="null">null</option>
+                                <select v-model="row.op" class="input w-32">
+                                    <option value="eq">= (eq)</option>
+                                    <option value="ne">≠ (ne)</option>
+                                    <option value="gt">&gt; (gt)</option>
+                                    <option value="gte">≥ (gte)</option>
+                                    <option value="lt">&lt; (lt)</option>
+                                    <option value="lte">≤ (lte)</option>
+                                    <option value="is_null">IS NULL</option>
+                                    <option value="is_not_null">IS NOT NULL</option>
                                 </select>
-                                <select v-if="row.valueType === 'placeholder'" v-model="row.value" class="input w-36">
-                                    <option v-for="ph in authPlaceholders" :key="ph" :value="ph">{{ ph }}</option>
-                                </select>
-                                <select v-else-if="row.valueType === 'boolean'" v-model="row.value" class="input w-24">
-                                    <option value="true">true</option>
-                                    <option value="false">false</option>
-                                </select>
-                                <input v-else-if="row.valueType !== 'null'" v-model="row.value" class="input w-36" placeholder="value" />
+                                <template v-if="row.op !== 'is_null' && row.op !== 'is_not_null'">
+                                    <select v-model="row.valueType" class="input w-28">
+                                        <option value="placeholder">placeholder</option>
+                                        <option value="string">string</option>
+                                        <option value="number">number</option>
+                                        <option value="boolean">boolean</option>
+                                        <option value="null">null</option>
+                                    </select>
+                                    <select v-if="row.valueType === 'placeholder'" v-model="row.value" class="input w-36">
+                                        <option v-for="ph in authPlaceholders" :key="ph" :value="ph">{{ ph }}</option>
+                                    </select>
+                                    <select v-else-if="row.valueType === 'boolean'" v-model="row.value" class="input w-24">
+                                        <option value="true">true</option>
+                                        <option value="false">false</option>
+                                    </select>
+                                    <input v-else-if="row.valueType !== 'null'" v-model="row.value" class="input w-36" placeholder="value" />
+                                </template>
                                 <button class="btn-ghost-danger" @click="ui(table.id).newPolicy.conditions.splice(idx, 1)">&times;</button>
                             </div>
                             <div class="flex items-center gap-2 mt-2">
-                                <button class="btn-ghost" @click="ui(table.id).newPolicy.conditions.push({ column: tableColumnNames(table)[0], valueType: 'placeholder', value: '$auth.id' })">+ Condition</button>
+                                <button class="btn-ghost" @click="ui(table.id).newPolicy.conditions.push({ column: tableColumnNames(table)[0], op: 'eq', valueType: 'placeholder', value: '$auth.id' })">+ Condition</button>
                                 <button class="btn-accent" @click="addPolicy(table)">+ Add Policy</button>
                             </div>
                         </div>
@@ -380,11 +394,29 @@ ob_start();
 
             function coerceValue(row) {
                 switch (row.valueType) {
-                    case 'null': return null;
-                    case 'number': return Number(row.value);
+                    case 'null':    return null;
+                    case 'number':  return Number(row.value);
                     case 'boolean': return row.value === 'true';
-                    default: return row.value;
+                    default:        return row.value;
                 }
+            }
+
+            function buildCondition(row) {
+                const noValueOps = ['is_null', 'is_not_null'];
+                if (row.op === 'eq') return coerceValue(row); // backward-compat scalar
+                if (noValueOps.includes(row.op)) return { op: row.op };
+                return { op: row.op, value: coerceValue(row) };
+            }
+
+            function formatConditions(conditions) {
+                const opLabels = { eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', is_null: 'IS NULL', is_not_null: 'IS NOT NULL' };
+                return Object.entries(conditions).map(([col, val]) => {
+                    if (val !== null && typeof val === 'object' && val.op) {
+                        const label = opLabels[val.op] || val.op;
+                        return val.value !== undefined ? `${col} ${label} ${val.value}` : `${col} ${label}`;
+                    }
+                    return `${col} = ${val}`;
+                }).join(', ');
             }
 
             async function addPolicy(table) {
@@ -393,7 +425,7 @@ ob_start();
                 if (!form.name.trim()) { toast.error('Policy name is required'); return; }
 
                 const conditions = {};
-                form.conditions.forEach(row => { conditions[row.column] = coerceValue(row); });
+                form.conditions.forEach(row => { conditions[row.column] = buildCondition(row); });
 
                 try {
                     await apiFetch(`/projects/${PROJECT_ID}/tables/${table.id}/rls-policies`, {
@@ -432,7 +464,7 @@ ob_start();
                 tableModal, tableForm, confirmState, ui, tableColumnNames,
                 openTableModal, createTable, toggleTable, startRename, submitRename, deleteTable,
                 addColumn, startEditColumn, submitEditColumn, deleteColumn,
-                addPolicy, deletePolicy,
+                addPolicy, deletePolicy, formatConditions,
             };
         }
     });

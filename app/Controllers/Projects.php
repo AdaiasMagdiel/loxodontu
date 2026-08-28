@@ -88,6 +88,49 @@ class Projects
         return $res->withJson($project);
     }
 
+    public static function update(Request $req, Response $res, stdClass $params): Response
+    {
+        $body = $req->getJson(ignoreContentType: true) ?? [];
+
+        $pdo     = Database::getConn('default');
+        $project = self::findOwned($pdo, $params->project_id, $params->user['id']);
+
+        if (!$project) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
+        }
+
+        $fields = [];
+        $values = [];
+
+        if (array_key_exists('name', $body)) {
+            $name = trim($body['name']);
+            if ($name === '') {
+                return $res->setStatusCode(422)->withJson(['error' => 'name cannot be empty']);
+            }
+            $fields[] = 'name = ?';
+            $values[] = $name;
+        }
+
+        if (array_key_exists('description', $body)) {
+            $fields[] = 'description = ?';
+            $values[] = trim($body['description']) ?: null;
+        }
+
+        if ($fields === []) {
+            return $res->setStatusCode(422)->withJson(['error' => 'Nothing to update']);
+        }
+
+        $values[] = $project['id'];
+        $pdo->prepare('UPDATE projects SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
+
+        $stmt = $pdo->prepare(
+            'SELECT id, name, slug, description, created_at FROM projects WHERE id = ? LIMIT 1'
+        );
+        $stmt->execute([$project['id']]);
+
+        return $res->withJson($stmt->fetch());
+    }
+
     public static function destroy(Request $req, Response $res, stdClass $params): Response
     {
         $pdo     = Database::getConn('default');

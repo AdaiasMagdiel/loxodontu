@@ -22,6 +22,11 @@ class Dashboard
         return $res->withTemplate(t('dashboard/index'), ['activeNav' => 'home']);
     }
 
+    public static function account(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/account'), ['activeNav' => 'account']);
+    }
+
     public static function projects(Request $req, Response $res, stdClass $params): Response
     {
         return $res->withTemplate(t('dashboard/projects/index'), ['activeNav' => 'projects']);

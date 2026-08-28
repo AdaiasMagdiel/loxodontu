@@ -17,6 +17,7 @@ require __DIR__ . '/error_handler.php';
 $app->get('/', [Site::class, 'index']);
 
 $app->get('/dashboard', [Dashboard::class, 'home']);
+$app->get('/dashboard/account', [Dashboard::class, 'account']);
 $app->get('/dashboard/projects', [Dashboard::class, 'projects']);
 $app->get('/dashboard/projects/[project_id]', [Dashboard::class, 'projectOverview']);
 $app->get('/dashboard/projects/[project_id]/tables', [Dashboard::class, 'projectTables']);
@@ -33,11 +34,15 @@ $app->group('/api', function () use ($app) {
         $app->post('/auth/register', [Auth::class, 'register']);
         $app->post('/auth/login', [Auth::class, 'login']);
         $app->post('/auth/logout', [Auth::class, 'logout'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/auth/me', [Auth::class, 'me'], [[PlatformAuth::class, 'handle']]);
+        $app->patch('/auth/me', [Auth::class, 'updateAccount'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/auth/me', [Auth::class, 'deleteAccount'], [[PlatformAuth::class, 'handle']]);
 
         // Projects
         $app->get('/projects', [Projects::class, 'index'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects', [Projects::class, 'store'], [[PlatformAuth::class, 'handle']]);
         $app->get('/projects/[project_id]', [Projects::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->patch('/projects/[project_id]', [Projects::class, 'update'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]', [Projects::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
 
         // Tables

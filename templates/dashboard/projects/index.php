@@ -13,14 +13,31 @@ ob_start();
             No projects yet.
         </div>
         <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
-            <div v-for="p in projects" :key="p.id" class="flex items-center justify-between px-5 py-3"
+            <div v-for="p in projects" :key="p.id" class="flex flex-col"
                 style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
-                <a :href="'/dashboard/projects/' + p.id" class="no-underline flex-1">
-                    <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ p.name }}</p>
-                    <p class="text-xs" style="color:var(--text-muted);">{{ p.description || 'No description' }}</p>
-                </a>
-                <span class="text-xs font-mono mr-4" style="color:var(--text-muted);">{{ p.slug }}</span>
-                <button class="btn-ghost-danger" @click="deleteProject(p)">Delete</button>
+                <div class="flex items-center justify-between px-5 py-3">
+                    <a :href="'/dashboard/projects/' + p.id" class="no-underline flex-1">
+                        <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ p.name }}</p>
+                        <p class="text-xs" style="color:var(--text-muted);">{{ p.description || 'No description' }}</p>
+                    </a>
+                    <span class="text-xs font-mono mr-4" style="color:var(--text-muted);">{{ p.slug }}</span>
+                    <div class="flex items-center gap-2">
+                        <button class="btn-ghost" @click="startRename(p)">Rename</button>
+                        <button class="btn-ghost-danger" @click="deleteProject(p)">Delete</button>
+                    </div>
+                </div>
+                <div v-if="renaming === p.id" class="px-5 pb-4 flex flex-col gap-2" style="border-top:1px solid var(--border);">
+                    <label class="field-label mt-2">Name
+                        <input v-model="renameForm.name" class="input mt-1" />
+                    </label>
+                    <label class="field-label">Description
+                        <input v-model="renameForm.description" class="input mt-1" />
+                    </label>
+                    <div class="flex gap-2 mt-1">
+                        <button class="btn-accent" @click="submitRename(p)">Save</button>
+                        <button class="btn-ghost" @click="renaming = null">Cancel</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -64,6 +81,9 @@ ob_start();
             const modal = Vue.ref(false);
             const form = Vue.reactive({ name: '', description: '' });
             const confirmState = Vue.reactive({ show: false, message: '', run: () => {} });
+
+            const renaming = Vue.ref(null);
+            const renameForm = Vue.reactive({ name: '', description: '' });
 
             function askConfirm(message, run) {
                 confirmState.message = message;
@@ -113,9 +133,33 @@ ob_start();
                 });
             }
 
+            function startRename(p) {
+                renaming.value = p.id;
+                renameForm.name = p.name;
+                renameForm.description = p.description || '';
+            }
+
+            async function submitRename(p) {
+                try {
+                    await apiFetch(`/projects/${p.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ name: renameForm.name, description: renameForm.description }),
+                    });
+                    renaming.value = null;
+                    toast.success('Project updated');
+                    await loadProjects();
+                } catch (e) {
+                    toast.error(e.message);
+                }
+            }
+
             loadProjects();
 
-            return { projects, loading, modal, form, confirmState, openModal, createProject, deleteProject };
+            return {
+                projects, loading, modal, form, confirmState,
+                renaming, renameForm,
+                openModal, createProject, deleteProject, startRename, submitRename,
+            };
         }
     });
 </script>

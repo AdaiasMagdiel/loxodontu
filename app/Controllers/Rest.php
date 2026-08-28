@@ -237,6 +237,13 @@ class Rest
     /** @param array{id: int, email: string, role: ?string}|null $auth */
     private static function resolvePlaceholder(mixed $value, ?array $auth): mixed
     {
+        if (is_array($value) && isset($value['op'])) {
+            if (isset($value['value'])) {
+                $value['value'] = self::resolvePlaceholder($value['value'], $auth);
+            }
+            return $value;
+        }
+
         if (!is_string($value) || !str_starts_with($value, '$auth.')) {
             return $value;
         }
