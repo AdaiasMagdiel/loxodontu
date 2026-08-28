@@ -65,14 +65,21 @@ class Projects
         $stmt->execute([$project['id']]);
         $tables = $stmt->fetchAll();
 
+        $hasReferences = self::projectColumnsHaveReferences($pdo);
+
         foreach ($tables as &$table) {
-            $stmt = $pdo->prepare(
-                'SELECT c.id, c.name, c.type, c.nullable, c.default_value, c.position,
-                        c.reference_table_id, c.reference_column, rt.name AS reference_table
-                 FROM project_columns c
-                 LEFT JOIN project_tables rt ON rt.id = c.reference_table_id
-                 WHERE c.table_id = ? ORDER BY c.position ASC, c.id ASC'
-            );
+            $columnSql = $hasReferences
+                ? 'SELECT c.id, c.name, c.type, c.nullable, c.default_value, c.position,
+                          c.reference_table_id, c.reference_column, rt.name AS reference_table
+                   FROM project_columns c
+                   LEFT JOIN project_tables rt ON rt.id = c.reference_table_id
+                   WHERE c.table_id = ? ORDER BY c.position ASC, c.id ASC'
+                : 'SELECT c.id, c.name, c.type, c.nullable, c.default_value, c.position,
+                          NULL AS reference_table_id, NULL AS reference_column, NULL AS reference_table
+                   FROM project_columns c
+                   WHERE c.table_id = ? ORDER BY c.position ASC, c.id ASC';
+
+            $stmt = $pdo->prepare($columnSql);
             $stmt->execute([$table['id']]);
             $cols = $stmt->fetchAll();
 
@@ -157,6 +164,19 @@ class Projects
         );
         $stmt->execute([$id, $userId]);
         return $stmt->fetch();
+    }
+
+    private static function projectColumnsHaveReferences(\PDO $pdo): bool
+    {
+        $stmt = $pdo->query("
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'project_columns'
+              AND COLUMN_NAME IN ('reference_table_id', 'reference_column')
+        ");
+
+        return (int) $stmt->fetchColumn() === 2;
     }
 
     private static function uniqueSlug(\PDO $pdo, int $userId, string $base): string

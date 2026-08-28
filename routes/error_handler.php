@@ -7,7 +7,7 @@ $app->set404Handler(function (Request $req, Response $res, stdClass $params) {
     $res = $res->setStatusCode(404);
     $accept = $req->getHeader('Accept') ?? '';
 
-    if (str_contains($accept, 'application/json')) {
+    if (expectsJson($req, $accept)) {
         return $res->withJson([
             'status' => 'error',
             'message' => 'Not Found'
@@ -23,7 +23,7 @@ $app->setExceptionHandler(Throwable::class, function (Request $req, Response $re
     $res = $res->setStatusCode(500);
     $accept = $req->getHeader('Accept') ?? '';
 
-    if (str_contains($accept, 'application/json')) {
+    if (expectsJson($req, $accept)) {
         return $res->withJson([
             'status' => 'error',
             'message' => 'Internal Server Error'
@@ -32,3 +32,11 @@ $app->setExceptionHandler(Throwable::class, function (Request $req, Response $re
 
     return $res->withTemplate(t('500'));
 });
+
+if (!function_exists('expectsJson')) {
+    function expectsJson(Request $req, string $accept): bool
+    {
+        return str_starts_with($req->getUri(), '/api/')
+            || str_contains($accept, 'application/json');
+    }
+}
