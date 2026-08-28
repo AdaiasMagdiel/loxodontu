@@ -21,6 +21,7 @@ $app->get('/dashboard/account', [Dashboard::class, 'account']);
 $app->get('/dashboard/projects', [Dashboard::class, 'projects']);
 $app->get('/dashboard/projects/[project_id]', [Dashboard::class, 'projectOverview']);
 $app->get('/dashboard/projects/[project_id]/tables', [Dashboard::class, 'projectTables']);
+$app->get('/dashboard/projects/[project_id]/sql', [Dashboard::class, 'projectSql']);
 $app->get('/dashboard/projects/[project_id]/keys', [Dashboard::class, 'projectKeys']);
 $app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
 

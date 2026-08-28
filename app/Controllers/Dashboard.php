@@ -48,6 +48,14 @@ class Dashboard
         ]);
     }
 
+    public static function projectSql(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/projects/sql'), [
+            'activeNav' => 'sql',
+            'projectId' => (int) $params->project_id,
+        ]);
+    }
+
     public static function projectKeys(Request $req, Response $res, stdClass $params): Response
     {
         return $res->withTemplate(t('dashboard/projects/keys'), [

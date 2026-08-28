@@ -4,6 +4,7 @@
 $tabs = [
     ['overview', '', 'Overview'],
     ['tables', '/tables', 'Tables'],
+    ['sql', '/sql', 'SQL Editor'],
     ['keys', '/keys', 'API Keys'],
     ['end-users', '/end-users', 'End Users'],
 ];

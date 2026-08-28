@@ -43,7 +43,7 @@ test('rejects sql that references another project physical table', function () {
     expect($response->getStatusCode())->toBe(422);
 });
 
-test('rejects sql with unknown project tables and multiple statements', function () {
+test('rejects sql with unknown project tables', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);
 
@@ -52,12 +52,35 @@ test('rejects sql with unknown project tables and multiple statements', function
         'json'    => ['sql' => 'select id from posts'],
     ]);
     expect($unknown->getStatusCode())->toBe(422);
+});
 
-    $multiple = api()->post("/api/v1/projects/{$project['id']}/sql", [
-        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
-        'json'    => ['sql' => 'select 1; select 2'],
+test('runs multiple sql commands split by semicolon or line', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+    createTable($owner['token'], $project['id'], 'posts', [
+        ['name' => 'title', 'type' => 'text'],
     ]);
-    expect($multiple->getStatusCode())->toBe(422);
+
+    $semicolon = api()->post("/api/v1/projects/{$project['id']}/sql", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['sql' => "insert into posts (title) values ('First'); select title from posts"],
+    ]);
+
+    expect($semicolon->getStatusCode())->toBe(200);
+    $semicolonBody = json($semicolon);
+    expect($semicolonBody['results'])->toHaveCount(2);
+    expect($semicolonBody['results'][0]['operation'])->toBe('INSERT');
+    expect($semicolonBody['results'][1]['rows'][0]['title'])->toBe('First');
+
+    $lines = api()->post("/api/v1/projects/{$project['id']}/sql", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['sql' => "insert into posts (title) values ('Second')\nselect title from posts"],
+    ]);
+
+    expect($lines->getStatusCode())->toBe(200);
+    $lineBody = json($lines);
+    expect($lineBody['results'])->toHaveCount(2);
+    expect(array_column($lineBody['results'][1]['rows'], 'title'))->toContain('Second');
 });
 
 test('allows semicolons inside string literals while still executing one statement', function () {

@@ -617,47 +617,37 @@ class Tables
             return $res->setStatusCode(422)->withJson(['error' => 'sql is too long']);
         }
 
-        $rewrite = self::rewriteProjectSql($pdo, (int) $project['id'], $sql);
-        if (isset($rewrite['error'])) {
-            return $res->setStatusCode(422)->withJson(['error' => $rewrite['error']]);
+        $statements = self::splitSqlStatements($sql);
+        if ($statements === []) {
+            return $res->setStatusCode(422)->withJson(['error' => 'sql is required']);
+        }
+
+        $rewrites = [];
+        foreach ($statements as $index => $statement) {
+            $rewrite = self::rewriteProjectSql($pdo, (int) $project['id'], $statement);
+            if (isset($rewrite['error'])) {
+                return $res->setStatusCode(422)->withJson([
+                    'error' => 'Command ' . ($index + 1) . ': ' . $rewrite['error'],
+                ]);
+            }
+            $rewrites[] = $rewrite;
         }
 
         try {
-            $started = microtime(true);
-            $stmt = $pdo->query($rewrite['sql']);
-            $columns = [];
-            if ($stmt->columnCount() > 0) {
-                for ($i = 0; $i < $stmt->columnCount(); $i++) {
-                    $meta = $stmt->getColumnMeta($i);
-                    $columns[] = $meta['name'] ?? "column_{$i}";
-                }
-            }
-            $rows = [];
-            $truncated = false;
-            if ($columns) {
-                while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) !== false) {
-                    if (count($rows) >= self::SQL_EDITOR_MAX_ROWS) {
-                        $truncated = true;
-                        break;
-                    }
-                    $rows[] = $row;
-                }
+            $results = [];
+            foreach ($rewrites as $index => $rewrite) {
+                $results[] = self::executeSqlStatement($pdo, $rewrite, $index + 1);
             }
 
-            return $res->withJson([
-                'sql'           => $rewrite['sql'],
-                'operation'     => $rewrite['operation'],
-                'columns'       => $columns,
-                'rows'          => $rows,
-                'truncated'     => $truncated,
-                'row_limit'     => self::SQL_EDITOR_MAX_ROWS,
-                'affected_rows' => $stmt->rowCount(),
-                'duration_ms'   => (int) round((microtime(true) - $started) * 1000),
-            ]);
+            $payload = ['results' => $results];
+            if (count($results) === 1) {
+                $payload += $results[0];
+            }
+
+            return $res->withJson($payload);
         } catch (\Throwable $e) {
             return $res->setStatusCode(422)->withJson([
                 'error' => 'SQL failed: ' . $e->getMessage(),
-                'sql'   => $rewrite['sql'],
             ]);
         }
     }
@@ -815,6 +805,101 @@ class Tables
         return 'fk_' . substr(hash('sha1', $physicalName . ':' . $column), 0, 24);
     }
 
+    /**
+     * @param array{sql: string, operation: string} $rewrite
+     * @return array{index: int, sql: string, operation: string, columns: string[], rows: array<int, array<string, mixed>>, truncated: bool, row_limit: int, affected_rows: int, duration_ms: int}
+     */
+    private static function executeSqlStatement(\PDO $pdo, array $rewrite, int $index): array
+    {
+        $started = microtime(true);
+        $stmt = $pdo->query($rewrite['sql']);
+        $columns = [];
+        if ($stmt->columnCount() > 0) {
+            for ($i = 0; $i < $stmt->columnCount(); $i++) {
+                $meta = $stmt->getColumnMeta($i);
+                $columns[] = $meta['name'] ?? "column_{$i}";
+            }
+        }
+        $rows = [];
+        $truncated = false;
+        if ($columns) {
+            while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) !== false) {
+                if (count($rows) >= self::SQL_EDITOR_MAX_ROWS) {
+                    $truncated = true;
+                    break;
+                }
+                $rows[] = $row;
+            }
+        }
+
+        return [
+            'index'         => $index,
+            'sql'           => $rewrite['sql'],
+            'operation'     => $rewrite['operation'],
+            'columns'       => $columns,
+            'rows'          => $rows,
+            'truncated'     => $truncated,
+            'row_limit'     => self::SQL_EDITOR_MAX_ROWS,
+            'affected_rows' => $stmt->rowCount(),
+            'duration_ms'   => (int) round((microtime(true) - $started) * 1000),
+        ];
+    }
+
+    /** @return string[] */
+    private static function splitSqlStatements(string $sql): array
+    {
+        $statements = [];
+        $statement = '';
+        $quote = null;
+        $length = strlen($sql);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $sql[$i];
+
+            if ($quote !== null) {
+                $statement .= $char;
+                if ($char === '\\' && $quote !== '`' && $i + 1 < $length) {
+                    $i++;
+                    $statement .= $sql[$i];
+                    continue;
+                }
+                if ($char === $quote) {
+                    if ($i + 1 < $length && $sql[$i + 1] === $quote && $quote !== '`') {
+                        $i++;
+                        $statement .= $sql[$i];
+                        continue;
+                    }
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($char === "'" || $char === '"' || $char === '`') {
+                $quote = $char;
+                $statement .= $char;
+                continue;
+            }
+
+            if ($char === ';' || $char === "\n" || $char === "\r") {
+                $trimmed = trim($statement);
+                if ($trimmed !== '') {
+                    $statements[] = $trimmed;
+                }
+                $statement = '';
+                continue;
+            }
+
+            $statement .= $char;
+        }
+
+        $trimmed = trim($statement);
+        if ($trimmed !== '') {
+            $statements[] = $trimmed;
+        }
+
+        return $statements;
+    }
+
     /** @return array{sql?: string, operation?: string, error?: string} */
     private static function rewriteProjectSql(\PDO $pdo, int $projectId, string $sql): array
     {
@@ -825,10 +910,6 @@ class Tables
 
         if (self::containsSqlComments($sql)) {
             return ['error' => 'SQL comments are not allowed in the SQL editor'];
-        }
-
-        if (self::containsSemicolonOutsideQuotedText($sql)) {
-            return ['error' => 'Only one SQL statement can be executed at a time'];
         }
 
         if (!preg_match('/^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i', $sql, $operationMatch)) {

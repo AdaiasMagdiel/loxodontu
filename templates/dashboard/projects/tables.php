@@ -16,41 +16,6 @@ ob_start();
             <button class="btn-accent" @click="openTableModal()">+ New Table</button>
         </div>
 
-        <div class="rounded-lg mb-5 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-            <div class="px-5 py-3 flex items-center justify-between" style="border-bottom:1px solid var(--border);">
-                <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">SQL Editor</p>
-                <button class="btn-accent" @click="runSql" :disabled="sqlState.running">{{ sqlState.running ? 'Running' : 'Run SQL' }}</button>
-            </div>
-            <div class="p-5">
-                <textarea v-model="sqlState.sql" class="input font-mono min-h-[120px]" spellcheck="false" placeholder="select id, title from posts;" @keydown.ctrl.enter.prevent="runSql"></textarea>
-                <div class="flex items-center justify-between gap-3 mt-2 text-xs" style="color:var(--text-muted);">
-                    <span>Use logical table names like posts. The API prefixes them for this project before execution.</span>
-                    <span class="font-mono shrink-0">Ctrl+Enter</span>
-                </div>
-                <div v-if="sqlState.rewrittenSql" class="mt-3 text-xs font-mono rounded-md px-3 py-2 overflow-x-auto" style="background:var(--bg-hover); color:var(--text-muted);">
-                    {{ sqlState.rewrittenSql }}
-                </div>
-                <div v-if="sqlState.result" class="mt-3 overflow-x-auto">
-                    <p class="text-xs mb-2" style="color:var(--text-muted);">
-                        {{ sqlState.result.operation }} · {{ sqlState.result.affected_rows }} affected rows · {{ sqlState.result.duration_ms }}ms
-                        <span v-if="sqlState.result.truncated"> · showing first {{ sqlState.result.row_limit }} rows</span>
-                    </p>
-                    <table v-if="sqlState.result.columns.length" class="w-full text-xs font-mono">
-                        <thead>
-                            <tr style="color:var(--text-muted); border-bottom:1px solid var(--border);">
-                                <th v-for="col in sqlState.result.columns" :key="col" class="text-left px-2 py-2">{{ col }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(row, idx) in sqlState.result.rows" :key="idx" style="border-bottom:1px solid var(--border);">
-                                <td v-for="col in sqlState.result.columns" :key="col" class="px-2 py-2" style="color:var(--text-main);">{{ row[col] }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <div v-if="loading" class="text-sm" style="color:var(--text-muted);">Loading…</div>
         <template v-else>
             <div v-if="tables.length === 0" class="rounded-lg p-8 text-center text-sm" style="background:var(--bg-surface); border:1px solid var(--border); color:var(--text-muted);">
@@ -275,12 +240,6 @@ ob_start();
                 return { name: '', type: 'text', nullable: false, default_value: '', references_table: '', references_column: '' };
             }
             const tableForm = Vue.reactive({ name: '', columns: [blankColumn()] });
-            const sqlState = Vue.reactive({
-                sql: 'select id from posts;',
-                rewrittenSql: '',
-                result: null,
-                running: false,
-            });
 
             const confirmState = Vue.reactive({ show: false, message: '', run: () => {} });
 
@@ -543,33 +502,12 @@ ob_start();
                 });
             }
 
-            async function runSql() {
-                if (!sqlState.sql.trim()) { toast.error('SQL is required'); return; }
-                sqlState.running = true;
-                sqlState.result = null;
-                sqlState.rewrittenSql = '';
-                try {
-                    const { body } = await apiFetch(`/projects/${PROJECT_ID}/sql`, {
-                        method: 'POST',
-                        body: JSON.stringify({ sql: sqlState.sql }),
-                    });
-                    sqlState.result = body;
-                    sqlState.rewrittenSql = body.sql;
-                    toast.success('SQL executed');
-                    if (!body.columns.length) await loadProject();
-                } catch (e) {
-                    toast.error(e.message);
-                } finally {
-                    sqlState.running = false;
-                }
-            }
-
             loadProject();
 
             return {
                 project, tables, loading, columnTypes, rlsOperations, authPlaceholders,
                 tableModal, tableForm, confirmState, ui, tableColumnNames,
-                sqlState, blankColumn, runSql,
+                blankColumn,
                 openTableModal, createTable, toggleTable, startRename, submitRename, deleteTable,
                 addColumn, startEditColumn, submitEditColumn, deleteColumn,
                 addPolicy, deletePolicy, formatConditions,
