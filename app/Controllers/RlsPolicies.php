@@ -90,7 +90,6 @@ class RlsPolicies
             if (!in_array($column, $columns, true)) {
                 return $res->setStatusCode(422)->withJson(['error' => "unknown column in conditions: {$column}"]);
             }
-
             if (is_array($value)) {
                 // Operator condition: { "op": "gt", "value": 5 } or { "op": "is_null" }
                 $op = $value['op'] ?? null;
