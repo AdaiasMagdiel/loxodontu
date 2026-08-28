@@ -1,6 +1,7 @@
 <?php
 
 use App\Controllers\Auth;
+use App\Controllers\Dashboard;
 use App\Controllers\EndUsers;
 use App\Controllers\Keys;
 use App\Controllers\Projects;
@@ -14,7 +15,13 @@ require __DIR__ . '/error_handler.php';
 // --- ROUTES
 
 $app->get('/', [Site::class, 'index']);
-$app->get('/dashboard', [Site::class, 'dashboard']);
+
+$app->get('/dashboard', [Dashboard::class, 'home']);
+$app->get('/dashboard/projects', [Dashboard::class, 'projects']);
+$app->get('/dashboard/projects/[project_id]', [Dashboard::class, 'projectOverview']);
+$app->get('/dashboard/projects/[project_id]/tables', [Dashboard::class, 'projectTables']);
+$app->get('/dashboard/projects/[project_id]/keys', [Dashboard::class, 'projectKeys']);
+$app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
 
 $app->group('/api', function () use ($app) {
     $app->get('/health', function ($req, $res) {

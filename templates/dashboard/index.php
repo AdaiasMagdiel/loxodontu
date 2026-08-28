@@ -2,175 +2,80 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main style="padding: 2rem; max-width: 960px;">
+    <main class="px-8 py-8 max-w-5xl mx-auto">
 
-        <div style="margin-bottom: 2rem;">
-            <p style="font-family:var(--font-head);font-weight:500;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin-bottom:0.5rem;">
-                Dashboard
-            </p>
-            <h1 style="font-family:var(--font-head);font-weight:700;font-size:2rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-main);line-height:1.1;">
-                Welcome, {{ store.user.name }}
-            </h1>
-            <p style="font-size:0.875rem;color:var(--text-muted);margin-top:0.4rem;">
-                Role: <span style="color:var(--text-main);font-weight:500;">{{ store.user.role }}</span>
-            </p>
-        </div>
+        <!-- LOGIN / REGISTER -->
+        <div v-if="!store.auth" class="min-h-screen -mt-8 -mx-8 flex items-center justify-center px-4">
+            <div class="w-full max-w-sm rounded-lg p-8" style="background:var(--bg-surface); border:1px solid var(--border);">
+                <div class="flex items-center gap-2 mb-6">
+                    <span class="w-2 h-2 rounded-full" style="background:var(--accent); box-shadow:0 0 8px var(--accent);"></span>
+                    <span class="font-head font-bold uppercase tracking-wider" style="color:var(--text-main);">Loxodontu</span>
+                </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:2rem;">
-            <div class="stat-card">
-                <p class="stat-label">Projects</p>
-                <p class="stat-value">0</p>
-            </div>
-            <div class="stat-card">
-                <p class="stat-label">Tables</p>
-                <p class="stat-value">0</p>
-            </div>
-            <div class="stat-card">
-                <p class="stat-label">API Keys</p>
-                <p class="stat-value">0</p>
-            </div>
-            <div class="stat-card">
-                <p class="stat-label">End Users</p>
-                <p class="stat-value">0</p>
-            </div>
-        </div>
+                <div class="flex mb-6 rounded-md overflow-hidden" style="border:1px solid var(--border);">
+                    <button class="tab-link flex-1 rounded-none" :class="{ active: authForm.mode === 'login' }"
+                        @click="authForm.mode = 'login'; authForm.error = ''">Log in</button>
+                    <button class="tab-link flex-1 rounded-none" :class="{ active: authForm.mode === 'register' }"
+                        @click="authForm.mode = 'register'; authForm.error = ''">Register</button>
+                </div>
 
-        <div style="margin-bottom:2rem;">
-            <p style="font-family:var(--font-head);font-weight:500;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--text-muted);margin-bottom:1rem;">
-                Quick Actions
-            </p>
-            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                <button @click="showToast()" class="btn-accent">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    New Project
-                </button>
-                <button @click="count++" class="btn-ghost">
-                    Vue Reactivity: {{ count }}
-                </button>
+                <form @submit.prevent="submitAuth" class="flex flex-col gap-3">
+                    <label v-if="authForm.mode === 'register'" class="field-label">
+                        Name
+                        <input v-model="authForm.name" type="text" required class="input mt-1" />
+                    </label>
+                    <label class="field-label">
+                        Email
+                        <input v-model="authForm.email" type="email" required class="input mt-1" />
+                    </label>
+                    <label class="field-label">
+                        Password
+                        <input v-model="authForm.password" type="password" required minlength="8" class="input mt-1" />
+                    </label>
+
+                    <p v-if="authForm.error" class="text-xs" style="color:#F85149;">{{ authForm.error }}</p>
+
+                    <button type="submit" class="btn-accent justify-center mt-2" :disabled="authForm.loading">
+                        {{ authForm.loading ? 'Please wait…' : (authForm.mode === 'login' ? 'Log in' : 'Create account') }}
+                    </button>
+                </form>
             </div>
         </div>
 
-        <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.9rem 1.25rem;border-bottom:1px solid var(--border);">
-                <p style="font-family:var(--font-head);font-weight:700;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-main);">
-                    API Status
-                </p>
-                <span class="status-chip">Operational</span>
+        <!-- HOME -->
+        <div v-else>
+            <div class="mb-8">
+                <p class="font-head font-medium text-xs uppercase tracking-widest mb-2" style="color:var(--accent);">Dashboard</p>
+                <h1 class="font-head font-bold text-3xl uppercase tracking-wide" style="color:var(--text-main); line-height:1.1;">
+                    Welcome, {{ store.auth.user.name }}
+                </h1>
+                <p class="text-sm mt-1" style="color:var(--text-muted);">{{ store.auth.user.email }}</p>
             </div>
-            <div style="padding:0.75rem 1.25rem;font-family:var(--font-mono);font-size:0.78rem;line-height:1.8;">
-                <div style="display:flex;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem;margin-bottom:0.4rem;">
-                    <span style="color:var(--accent);min-width:36px;">GET</span>
-                    <span style="color:var(--text-muted);flex:1;">/api/health</span>
-                    <span style="color:#3FB950;">200 OK</span>
-                </div>
-                <div style="display:flex;gap:1rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem;margin-bottom:0.4rem;">
-                    <span style="color:#79C0FF;min-width:36px;">POST</span>
-                    <span style="color:var(--text-muted);flex:1;">/api/v1/auth/register</span>
-                    <span style="color:var(--border);">—</span>
-                </div>
-                <div style="display:flex;gap:1rem;">
-                    <span style="color:#79C0FF;min-width:36px;">POST</span>
-                    <span style="color:var(--text-muted);flex:1;">/api/v1/auth/login</span>
-                    <span style="color:var(--border);">—</span>
-                </div>
+
+            <div class="flex items-center justify-between mb-4">
+                <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">Your Projects</p>
+                <a href="/dashboard/projects" class="btn-accent">+ New Project</a>
+            </div>
+
+            <div v-if="loading" class="text-sm" style="color:var(--text-muted);">Loading…</div>
+            <div v-else-if="projects.length === 0" class="rounded-lg p-8 text-center text-sm" style="background:var(--bg-surface); border:1px solid var(--border); color:var(--text-muted);">
+                No projects yet. <a href="/dashboard/projects" style="color:var(--accent);">Create your first one</a>.
+            </div>
+            <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
+                <a v-for="p in projects.slice(0, 5)" :key="p.id" :href="'/dashboard/projects/' + p.id"
+                    class="flex items-center justify-between px-5 py-3 no-underline"
+                    style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
+                    <div>
+                        <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ p.name }}</p>
+                        <p class="text-xs font-mono" style="color:var(--text-muted);">{{ p.slug }}</p>
+                    </div>
+                    <span class="text-xs" style="color:var(--text-muted);">{{ formatDate(p.created_at) }}</span>
+                </a>
             </div>
         </div>
 
     </main>
 </template>
-
-<style>
-    .stat-card {
-        background: var(--bg-surface);
-        padding: 1.25rem 1.5rem;
-        border-right: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        transition: background .2s;
-    }
-    .stat-card:hover { background: var(--bg-hover); }
-    .stat-label {
-        font-family: var(--font-head);
-        font-weight: 500;
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--text-muted);
-        margin-bottom: 0.4rem;
-    }
-    .stat-value {
-        font-family: var(--font-head);
-        font-weight: 700;
-        font-size: 2rem;
-        color: var(--text-main);
-        line-height: 1;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .btn-accent {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: var(--accent);
-        color: #0D1117;
-        font-family: var(--font-head);
-        font-weight: 700;
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 0.55rem 1.1rem;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-        transition: opacity .2s, box-shadow .2s;
-        box-shadow: 0 0 16px rgba(0,240,255,0.2);
-    }
-    .btn-accent:hover { opacity: 0.88; box-shadow: 0 0 24px rgba(0,240,255,0.4); }
-
-    .btn-ghost {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: transparent;
-        color: var(--text-main);
-        font-family: var(--font-head);
-        font-weight: 500;
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 0.55rem 1.1rem;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        cursor: pointer;
-        transition: border-color .2s, color .2s;
-    }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-
-    .status-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        font-family: var(--font-head);
-        font-weight: 500;
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--accent);
-        background: var(--accent-dim);
-        border: 1px solid rgba(0,240,255,0.2);
-        padding: 0.2rem 0.6rem;
-        border-radius: 100px;
-    }
-    .status-chip::before {
-        content: '';
-        display: block;
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 6px var(--accent);
-    }
-</style>
 <?php $body = ob_get_clean(); ?>
 
 <?php ob_start(); ?>
@@ -179,13 +84,48 @@ ob_start();
         template: '#tpl-page',
         setup() {
             const store = Vue.inject('store');
-            const count = Vue.ref(0);
+            const authForm = Vue.reactive({ mode: 'login', name: '', email: '', password: '', loading: false, error: '' });
+            const projects = Vue.ref([]);
+            const loading = Vue.ref(false);
 
-            const showToast = () => {
-                toast.success('New project flow coming soon!');
-            };
+            function formatDate(v) {
+                if (!v) return '—';
+                return new Date(v.replace(' ', 'T')).toLocaleDateString();
+            }
 
-            return { store, count, showToast };
+            async function submitAuth() {
+                authForm.loading = true;
+                authForm.error = '';
+                try {
+                    const path = authForm.mode === 'login' ? '/auth/login' : '/auth/register';
+                    const payload = authForm.mode === 'login'
+                        ? { email: authForm.email, password: authForm.password }
+                        : { name: authForm.name, email: authForm.email, password: authForm.password };
+                    const { body } = await apiFetch(path, { method: 'POST', body: JSON.stringify(payload) });
+                    localStorage.setItem('loxo-auth', JSON.stringify(body));
+                    location.reload();
+                } catch (e) {
+                    authForm.error = e.message;
+                } finally {
+                    authForm.loading = false;
+                }
+            }
+
+            async function loadProjects() {
+                loading.value = true;
+                try {
+                    const { body } = await apiFetch('/projects');
+                    projects.value = body;
+                } catch (e) {
+                    toast.error(e.message);
+                } finally {
+                    loading.value = false;
+                }
+            }
+
+            if (store.auth) loadProjects();
+
+            return { store, authForm, submitAuth, projects, loading, formatDate };
         }
     });
 </script>
@@ -198,7 +138,7 @@ $page = [
     'info'   => [
         'title'     => 'Home — Loxodontu',
         'pageTitle' => 'Home',
-    ]
+    ],
 ];
 
 include t('layouts/dashboard');

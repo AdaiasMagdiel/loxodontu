@@ -1,0 +1,15 @@
+<?php
+/** @var int $projectId */
+/** @var string $activeNav */
+$tabs = [
+    ['overview', '', 'Overview'],
+    ['tables', '/tables', 'Tables'],
+    ['keys', '/keys', 'API Keys'],
+    ['end-users', '/end-users', 'End Users'],
+];
+?>
+<div class="flex gap-2 mb-6">
+    <?php foreach ($tabs as [$id, $suffix, $label]): ?>
+        <a href="/dashboard/projects/<?= $projectId ?><?= $suffix ?>" class="tab-link <?= $activeNav === $id ? 'active' : '' ?>"><?= e($label) ?></a>
+    <?php endforeach; ?>
+</div>

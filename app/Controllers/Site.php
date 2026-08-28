@@ -12,9 +12,4 @@ class Site
     {
         return $res->withTemplate(t('site/index'));
     }
-
-    public static function dashboard(Request $req, Response $res, stdClass $params)
-    {
-        return $res->withTemplate(t('dashboard/index'));
-    }
 }
