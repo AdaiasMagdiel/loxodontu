@@ -20,10 +20,9 @@ This is where the project is heading — in rough priority order. Nothing here i
 - **RLS (Row-Level Security)** — column-value conditions per operation per table, managed via the API and enforced transparently at the REST layer. Policies can be scoped to an end-user role and reference the caller via `$auth.id` / `$auth.email` / `$auth.role` placeholders (e.g. "a manager can only update their own rows; an admin can do anything").
 - **Project-level auth** — a project's own end users can register/login/logout (separate from platform users), authenticated via `X-User-Token` on REST passthrough requests. Roles are assigned by the project owner and feed RLS policies.
 - **Schema alterations** — tables and columns can be changed after creation: rename a table, add a column, rename a column, change a column's type/nullability/default. Column removal is destructive and requires `?confirm=true`.
+- **Dashboard UI** — web interface to manage projects, tables, columns, RLS policies, API keys, and end users without touching the API directly. PHP-routed pages, each backed by a scoped Vue 3 component.
 
 ### Next
-
-- **Dashboard UI** — minimal web interface to manage projects, tables, columns, and API keys without touching the API directly.
 
 ### Later
 
