@@ -7,7 +7,6 @@ use AdaiasMagdiel\Erlenmeyer\Response as ErlResponse;
 use AdaiasMagdiel\PdoRestify\Api;
 use AdaiasMagdiel\PdoRestify\Http\Request as RestRequest;
 use AdaiasMagdiel\PdoRestify\Operation;
-use AdaiasMagdiel\PdoRestify\QueryBuilder;
 use AdaiasMagdiel\PdoRestify\Resource;
 use App\Database;
 use stdClass;
@@ -155,30 +154,10 @@ class Rest
             $resource->allow($op, fn(array $ctx) => $frozen);
         }
 
-        // pdo-restify's update()/delete() re-fetch the row via the SELECT policy to build
-        // their response/404, not the UPDATE/DELETE policy — so when SELECT is public but
-        // UPDATE/DELETE is owner-scoped (a very normal RLS setup), a write blocked by RLS
-        // still comes back 200 with the untouched row instead of 404. Pre-check visibility
-        // under the actual write policy ourselves so a denied write fails honestly.
-        if (in_array($method, ['PATCH', 'PUT', 'DELETE'], true) && isset($params->id)) {
-            $writeOp         = $method === 'DELETE' ? 'delete' : 'update';
-            $writeConditions = $policyConditions[$writeOp];
-
-            if ($writeConditions !== null) {
-                $checkConditions = $writeConditions;
-                $checkConditions['id'] = $params->id;
-
-                [$checkSql, $checkParams] = QueryBuilder::select($physicalTable, ['id'], [], $checkConditions, null, 1, 0);
-                $checkStmt = $pdo->prepare($checkSql);
-                $checkStmt->execute($checkParams);
-
-                if ($checkStmt->fetch() === false) {
-                    return $res->setStatusCode(404)->withJson([
-                        'error' => "Resource '{$table}' with id '{$params->id}' not found",
-                    ]);
-                }
-            }
-        }
+        // pdo-restify >=0.4.1 checks a write's visibility under the UPDATE policy itself
+        // before writing (see Api::update()'s exists() check), so a write blocked by RLS
+        // honestly 404s even when SELECT is public and UPDATE is owner-scoped — no need
+        // to pre-check that ourselves anymore.
 
         $api  = (new Api($pdo))->register($resource);
         $path = $physicalTable . (isset($params->id) ? '/' . $params->id : '');
