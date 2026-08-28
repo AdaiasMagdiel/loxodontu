@@ -67,8 +67,11 @@ class Projects
 
         foreach ($tables as &$table) {
             $stmt = $pdo->prepare(
-                'SELECT id, name, type, nullable, default_value, position FROM project_columns
-                 WHERE table_id = ? ORDER BY position ASC, id ASC'
+                'SELECT c.id, c.name, c.type, c.nullable, c.default_value, c.position,
+                        c.reference_table_id, c.reference_column, rt.name AS reference_table
+                 FROM project_columns c
+                 LEFT JOIN project_tables rt ON rt.id = c.reference_table_id
+                 WHERE c.table_id = ? ORDER BY c.position ASC, c.id ASC'
             );
             $stmt->execute([$table['id']]);
             $cols = $stmt->fetchAll();
@@ -76,6 +79,7 @@ class Projects
             foreach ($cols as &$col) {
                 $col['nullable'] = (bool) $col['nullable'];
                 $col['position'] = (int) $col['position'];
+                $col['reference_table_id'] = $col['reference_table_id'] !== null ? (int) $col['reference_table_id'] : null;
             }
             unset($col);
 

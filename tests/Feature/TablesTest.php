@@ -197,6 +197,29 @@ test('applies default values per column type when creating the physical table', 
     expect($row['seen_at'])->not->toBeNull();
 });
 
+test('creates columns with expanded types and same-project foreign keys', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+    createTable($owner['token'], $project['id'], 'authors', [
+        ['name' => 'name', 'type' => 'longtext'],
+        ['name' => 'public_id', 'type' => 'uuid', 'nullable' => true],
+    ]);
+
+    $table = createTable($owner['token'], $project['id'], 'posts', [
+        [
+            'name' => 'author_id',
+            'type' => 'integer',
+            'references_table' => 'authors',
+            'references_column' => 'id',
+        ],
+        ['name' => 'rating', 'type' => 'float', 'nullable' => true],
+        ['name' => 'published_on', 'type' => 'date', 'nullable' => true],
+    ]);
+
+    expect($table['columns'][0]['reference_table'])->toBe('authors');
+    expect($table['columns'][0]['reference_column'])->toBe('id');
+});
+
 test('creates a table with a physical backing table usable via REST passthrough', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);

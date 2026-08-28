@@ -20,15 +20,19 @@ return [
                 `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 `table_id`      BIGINT UNSIGNED NOT NULL,
                 `name`          VARCHAR(64) NOT NULL,
-                `type`          ENUM('text','integer','decimal','boolean','timestamp','json') NOT NULL DEFAULT 'text',
+                `type`          ENUM('text','longtext','integer','bigint','decimal','float','boolean','date','time','timestamp','json','uuid') NOT NULL DEFAULT 'text',
                 `nullable`      TINYINT(1) NOT NULL DEFAULT 1,
                 `default_value` TEXT NULL DEFAULT NULL,
+                `reference_table_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+                `reference_column`   VARCHAR(64) NULL DEFAULT NULL,
                 `position`      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 `created_at`    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `project_columns_table_name_unique` (`table_id`, `name`),
                 CONSTRAINT `fk_project_columns_table_id`
-                    FOREIGN KEY (`table_id`) REFERENCES `project_tables` (`id`) ON DELETE CASCADE
+                    FOREIGN KEY (`table_id`) REFERENCES `project_tables` (`id`) ON DELETE CASCADE,
+                CONSTRAINT `fk_project_columns_reference_table_id`
+                    FOREIGN KEY (`reference_table_id`) REFERENCES `project_tables` (`id`) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
     },

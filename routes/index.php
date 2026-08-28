@@ -55,6 +55,7 @@ $app->group('/api', function () use ($app) {
         $app->post('/projects/[project_id]/tables/[table_id]/columns', [\App\Controllers\Tables::class, 'addColumn'], [[PlatformAuth::class, 'handle']]);
         $app->patch('/projects/[project_id]/tables/[table_id]/columns/[column_id]', [\App\Controllers\Tables::class, 'updateColumn'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/tables/[table_id]/columns/[column_id]', [\App\Controllers\Tables::class, 'destroyColumn'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/sql', [\App\Controllers\Tables::class, 'runSql'], [[PlatformAuth::class, 'handle']]);
 
         // API Keys
         $app->get('/projects/[project_id]/keys', [Keys::class, 'index'], [[PlatformAuth::class, 'handle']]);
