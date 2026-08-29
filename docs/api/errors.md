@@ -66,5 +66,5 @@ REST passthrough's own list endpoint) echoes the resolved pagination back as res
 | Header | Meaning |
 | ------ | -------- |
 | `X-Total-Count` | Total matching rows, ignoring `limit`/`offset` |
-| `X-Page-Limit` | The `limit` actually applied (default 25, capped at 100) |
+| `X-Page-Limit` | The `limit` actually applied (default 25 for platform list endpoints, 50 for REST passthrough; capped at 100 either way) |
 | `X-Page-Offset` | The `offset` actually applied (default 0) |
