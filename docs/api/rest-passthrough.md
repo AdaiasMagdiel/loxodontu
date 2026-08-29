@@ -1,5 +1,8 @@
 # REST passthrough
 
+This layer is powered by [pdo-restify](https://github.com/adaiasmagdiel/pdo-restify), which turns
+a PDO connection into a REST API — RLS and auth are applied on top of it.
+
 | Method              | Route                              | Description                          |
 | --------------------| -------------------------------------| --------------------------------------|
 | GET/POST/PATCH/DELETE | `/{project_id}/rest/{table}`       | List/insert/bulk-update/bulk-delete   |

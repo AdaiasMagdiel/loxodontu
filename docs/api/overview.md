@@ -1,5 +1,8 @@
 # API Overview
 
+The HTTP layer — routing, requests, responses, middleware — is
+[Erlenmeyer](https://github.com/adaiasmagdiel/erlenmeyer), a small standalone PHP framework.
+
 Everything lives under `/api/v1`. Platform routes (managing your own account, projects, tables,
 keys, RLS policies, and end users) are authenticated with `Authorization: Bearer <platform token>`
 from `/auth/login`. REST passthrough routes are authenticated with a project API key instead, plus

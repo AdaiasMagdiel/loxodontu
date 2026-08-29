@@ -22,6 +22,19 @@ minutes. Read [Philosophy](philosophy.md) for why the project is built this way,
 into the [API Overview](api/overview.md). Deploying to shared hosting? See
 [Deployment](deployment.md).
 
+## Built with
+
+Loxodontu's core is three small, independent PHP libraries, also open-source:
+
+- **[Erlenmeyer](https://github.com/adaiasmagdiel/erlenmeyer)** — the HTTP layer: routing,
+  requests, responses, and middleware.
+- **[pdo-restify](https://github.com/adaiasmagdiel/pdo-restify)** — turns a PDO connection into a
+  REST API; powers [REST passthrough](api/rest-passthrough.md).
+- **[fullcrawl](https://github.com/adaiasmagdiel/fullcrawl)** — the migration runner used to
+  manage the database schema (see [Getting Started](getting-started.md#run-the-migrations)).
+
+Each one is usable on its own, outside of Loxodontu, in any PHP project.
+
 ## License
 
 AGPL-3.0. See [LICENSE](https://github.com/adaiasmagdiel/loxodontu/blob/main/LICENSE) and
