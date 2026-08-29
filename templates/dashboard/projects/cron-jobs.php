@@ -61,7 +61,7 @@ ob_start();
                             <option value="command">Command</option>
                         </select>
                     </label>
-                    <label class="field-label">Method<input v-model="form.method" class="input mt-1 font-mono" :disabled="form.type !== 'http'" /></label>
+                    <label v-if="form.type === 'http'" class="field-label">Method<input v-model="form.method" class="input mt-1 font-mono" /></label>
                 </div>
                 <label class="field-label mt-3">Target
                     <select v-if="form.type === 'function'" v-model="form.target" class="input mt-1">
