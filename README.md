@@ -11,6 +11,15 @@ Early development. Just started, no stable release yet, expect things to change.
 
 **[Read the full documentation →](https://adaiasmagdiel.github.io/loxodontu/)**
 
+## Built with
+
+- **[Erlenmeyer](https://github.com/adaiasmagdiel/erlenmeyer)** — the HTTP layer: routing,
+  requests, responses, and middleware.
+- **[pdo-restify](https://github.com/adaiasmagdiel/pdo-restify)** — turns a PDO connection into a
+  REST API; powers REST passthrough.
+- **[fullcrawl](https://github.com/adaiasmagdiel/fullcrawl)** — the migration runner used to
+  manage the database schema.
+
 ## Testing
 
 Feature tests run against a real MySQL/MariaDB database via [Pest](https://pestphp.com/). Set the
