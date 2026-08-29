@@ -2,19 +2,22 @@
 
 use App\Cron\CronJobRunner;
 use App\Database;
+function edgeFunctionSource(): string
+{
+    return <<<'PHP'
+<?php
+
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
 
-class TestEdgeFunction
-{
-    public static function hello(FunctionRequest $request): FunctionResponse
-    {
-        return FunctionResponse::json([
-            'ok' => true,
-            'project_id' => $request->projectId,
-            'message' => $request->body['message'] ?? 'hello',
-        ]);
-    }
+return function (FunctionRequest $request): FunctionResponse {
+    return FunctionResponse::json([
+        'ok' => true,
+        'project_id' => $request->projectId,
+        'message' => $request->body['message'] ?? 'hello',
+    ]);
+};
+PHP;
 }
 
 test('creates and lists edge functions for a project owner', function () {
@@ -26,7 +29,7 @@ test('creates and lists edge functions for a project owner', function () {
         'json' => [
             'name' => 'Hello',
             'slug' => 'hello',
-            'handler' => 'TestEdgeFunction::hello',
+            'source_code' => edgeFunctionSource(),
             'methods' => ['POST'],
         ],
     ]);
@@ -35,7 +38,6 @@ test('creates and lists edge functions for a project owner', function () {
     expect(json($created))->toMatchArray([
         'name' => 'Hello',
         'slug' => 'hello',
-        'handler' => 'TestEdgeFunction::hello',
         'methods' => ['POST'],
         'require_api_key' => true,
         'enabled' => true,
@@ -58,7 +60,7 @@ test('invokes an edge function with the owning platform token', function () {
         'json' => [
             'name' => 'Hello',
             'slug' => 'hello',
-            'handler' => 'TestEdgeFunction::hello',
+            'source_code' => edgeFunctionSource(),
             'methods' => ['POST'],
         ],
     ]);
@@ -82,7 +84,7 @@ test('invokes an edge function with a project api key that has function permissi
         'json' => [
             'name' => 'Hello',
             'slug' => 'hello',
-            'handler' => 'TestEdgeFunction::hello',
+            'source_code' => edgeFunctionSource(),
             'methods' => ['POST'],
         ],
     ]);
@@ -105,7 +107,7 @@ test('cron jobs can invoke edge functions', function () {
         'json' => [
             'name' => 'Hello',
             'slug' => 'hello',
-            'handler' => 'TestEdgeFunction::hello',
+            'source_code' => edgeFunctionSource(),
             'methods' => ['POST'],
         ],
     ]);

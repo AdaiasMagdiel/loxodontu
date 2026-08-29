@@ -31,7 +31,7 @@ ob_start();
                                     <span class="text-[10px] font-mono px-2 py-0.5 rounded" style="background:var(--bg-hover); color:var(--text-muted);">{{ fn.enabled ? 'enabled' : 'disabled' }}</span>
                                 </div>
                                 <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">/api/v1/{{ PROJECT_ID }}/functions/{{ fn.slug }}</p>
-                                <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">{{ fn.handler }}</p>
+                                <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">PHP · {{ fn.timeout_seconds }}s · {{ fn.memory_limit_mb }}MB</p>
                                 <p v-if="fn.description" class="text-xs mt-2" style="color:var(--text-muted);">{{ fn.description }}</p>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
@@ -63,17 +63,28 @@ ob_start();
             <div class="modal-card max-w-xl">
                 <p class="modal-title">{{ form.id ? 'Edit Function' : 'New Function' }}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="field-label">Name<input v-model="form.name" class="input mt-1" /></label>
-                    <label class="field-label">Slug<input v-model="form.slug" class="input mt-1 font-mono" /></label>
+                    <label class="field-label">Name<input v-model="form.name" class="input mt-1" @input="syncSlugFromName" /></label>
+                    <label class="field-label">Slug<input v-model="form.slug" class="input mt-1 font-mono" @input="form.slugTouched = true" /></label>
                 </div>
-                <label class="field-label mt-3">Handler<input v-model="form.handler" class="input mt-1 font-mono" placeholder="App\Jobs\DailyCleanup::handle" /></label>
-                <label class="field-label mt-3">Description<textarea v-model="form.description" class="input mt-1 min-h-[72px]"></textarea></label>
+                <label class="field-label mt-3">Description <span class="normal-case tracking-normal">(optional)</span><textarea v-model="form.description" class="input mt-1 min-h-[72px]"></textarea></label>
                 <p class="field-label mt-3 mb-1">Methods</p>
                 <div class="flex gap-3 flex-wrap">
                     <label v-for="method in methodOptions" :key="method" class="flex items-center gap-1 text-xs" style="color:var(--text-main);">
                         <input type="checkbox" :value="method" v-model="form.methods" /> {{ method }}
                     </label>
                 </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    <label class="field-label">Timeout seconds<input v-model.number="form.timeout_seconds" type="number" min="1" max="60" class="input mt-1" /></label>
+                    <label class="field-label">Memory MB<input v-model.number="form.memory_limit_mb" type="number" min="16" max="256" class="input mt-1" /></label>
+                </div>
+                <div class="flex items-center justify-between gap-3 mt-3 mb-1">
+                    <p class="field-label">Source</p>
+                    <label class="btn-ghost cursor-pointer">
+                        Upload PHP
+                        <input type="file" accept=".php,text/x-php,text/plain" class="hidden" @change="loadSourceFile" />
+                    </label>
+                </div>
+                <textarea v-model="form.source_code" class="input font-mono min-h-[260px]" spellcheck="false"></textarea>
                 <div class="flex gap-4 mt-3">
                     <label class="flex items-center gap-2 text-xs" style="color:var(--text-main);"><input type="checkbox" v-model="form.require_api_key" /> Require API key</label>
                     <label class="flex items-center gap-2 text-xs" style="color:var(--text-main);"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
@@ -102,7 +113,33 @@ ob_start();
             const functions = Vue.ref([]);
             const loading = Vue.ref(true);
             const modal = Vue.ref(false);
-            const form = Vue.reactive({ id: null, name: '', slug: '', handler: '', description: '', methods: ['POST'], require_api_key: true, enabled: true });
+            const defaultSource = [
+                '<?php',
+                '',
+                'use App\\Edge\\FunctionRequest;',
+                'use App\\Edge\\FunctionResponse;',
+                '',
+                'return function (FunctionRequest $request): FunctionResponse {',
+                '    return FunctionResponse::json([',
+                "        'ok' => true,",
+                "        'payload' => $request->body,",
+                '    ]);',
+                '};',
+                '',
+            ].join('\n');
+            const form = Vue.reactive({
+                id: null,
+                name: '',
+                slug: '',
+                slugTouched: false,
+                description: '',
+                source_code: defaultSource,
+                methods: ['POST'],
+                require_api_key: true,
+                enabled: true,
+                timeout_seconds: 10,
+                memory_limit_mb: 32,
+            });
             const test = Vue.reactive({ slug: '', payload: '{}', output: '', running: false });
 
             async function loadProjectHeader() {
@@ -115,28 +152,70 @@ ob_start();
             }
 
             function resetForm() {
-                Object.assign(form, { id: null, name: '', slug: '', handler: '', description: '', methods: ['POST'], require_api_key: true, enabled: true });
+                Object.assign(form, {
+                    id: null,
+                    name: '',
+                    slug: '',
+                    slugTouched: false,
+                    description: '',
+                    source_code: defaultSource,
+                    methods: ['POST'],
+                    require_api_key: true,
+                    enabled: true,
+                    timeout_seconds: 10,
+                    memory_limit_mb: 32,
+                });
             }
 
             function openCreate() { resetForm(); modal.value = true; }
+
+            function slugify(value) {
+                return value
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9_-]+/g, '-')
+                    .replace(/-+/g, '-')
+                    .replace(/^-|-$/g, '')
+                    .slice(0, 64);
+            }
+
+            function syncSlugFromName() {
+                if (!form.id && !form.slugTouched) {
+                    form.slug = slugify(form.name);
+                }
+            }
 
             function editFunction(fn) {
                 Object.assign(form, {
                     id: fn.id,
                     name: fn.name,
                     slug: fn.slug,
-                    handler: fn.handler,
+                    slugTouched: true,
                     description: fn.description || '',
+                    source_code: fn.source_code || defaultSource,
                     methods: fn.methods && fn.methods.length ? fn.methods : [],
                     require_api_key: fn.require_api_key,
                     enabled: fn.enabled,
+                    timeout_seconds: fn.timeout_seconds || 10,
+                    memory_limit_mb: fn.memory_limit_mb || 32,
                 });
                 modal.value = true;
             }
 
             async function saveFunction() {
-                if (!form.name.trim() || !form.slug.trim() || !form.handler.trim()) { toast.error('Name, slug, and handler are required'); return; }
-                const payload = { name: form.name, slug: form.slug, handler: form.handler, description: form.description, methods: form.methods, require_api_key: form.require_api_key, enabled: form.enabled };
+                if (!form.name.trim() || !form.slug.trim() || !form.source_code.trim()) { toast.error('Name, slug, and source are required'); return; }
+                const payload = {
+                    name: form.name,
+                    slug: form.slug,
+                    description: form.description || null,
+                    source_code: form.source_code,
+                    methods: form.methods,
+                    require_api_key: form.require_api_key,
+                    enabled: form.enabled,
+                    timeout_seconds: form.timeout_seconds,
+                    memory_limit_mb: form.memory_limit_mb,
+                };
                 try {
                     await apiFetch(`/projects/${PROJECT_ID}/functions${form.id ? '/' + form.id : ''}`, {
                         method: form.id ? 'PATCH' : 'POST',
@@ -146,6 +225,17 @@ ob_start();
                     toast.success('Function saved');
                     await loadFunctions();
                 } catch (e) { toast.error(e.message); }
+            }
+
+            function loadSourceFile(event) {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+
+                file.text()
+                    .then(text => { form.source_code = text; })
+                    .catch(() => toast.error('Could not read the selected file'));
+
+                event.target.value = '';
             }
 
             async function deleteFunction(fn) {
@@ -175,7 +265,7 @@ ob_start();
             loadProjectHeader();
             loadFunctions();
 
-            return { PROJECT_ID, project, functions, loading, modal, form, methodOptions, test, openCreate, editFunction, saveFunction, deleteFunction, invokeFunction };
+            return { PROJECT_ID, project, functions, loading, modal, form, methodOptions, test, openCreate, editFunction, saveFunction, deleteFunction, invokeFunction, syncSlugFromName, loadSourceFile };
         }
     });
 </script>

@@ -55,7 +55,11 @@ class EdgeFunctionRunner
             return FunctionResponse::json(['error' => 'Method not allowed'], 405);
         }
 
-        $target = trim((string) $function['handler']);
+        if (!empty($function['source_code'])) {
+            return $this->invokeSource($function, $projectId, $method, $headers, $query, $body, $auth);
+        }
+
+        $target = trim((string) ($function['handler'] ?? ''));
         if (!str_contains($target, '::')) {
             return FunctionResponse::json(['error' => 'Function handler must use ClassName::method syntax'], 500);
         }
@@ -92,5 +96,137 @@ class EdgeFunctionRunner
     private function markInvoked(int $id): void
     {
         $this->pdo->prepare('UPDATE project_functions SET last_invoked_at = UTC_TIMESTAMP() WHERE id = ?')->execute([$id]);
+    }
+
+    /**
+     * @param array<string, mixed> $function
+     * @param array<string, string> $headers
+     * @param array<string, mixed> $query
+     * @param array<string, mixed> $body
+     * @param array{id: int, email: string, role: ?string}|null $auth
+     */
+    private function invokeSource(
+        array $function,
+        int $projectId,
+        string $method,
+        array $headers,
+        array $query,
+        array $body,
+        ?array $auth,
+    ): FunctionResponse {
+        $sandboxDir = $this->sandboxDir($projectId, (string) $function['slug']);
+        if (!is_dir($sandboxDir) && !mkdir($sandboxDir, 0700, true)) {
+            return FunctionResponse::json(['error' => 'Unable to prepare function sandbox'], 500);
+        }
+
+        $codePath = $sandboxDir . '/index_' . hash('sha256', (string) $function['source_code']) . '.php';
+        file_put_contents($codePath, (string) $function['source_code']);
+
+        $timeout = max(1, (int) ($function['timeout_seconds'] ?? 10));
+        $memoryLimit = max(16, (int) ($function['memory_limit_mb'] ?? 32)) . 'M';
+        $input = json_encode([
+            'code_path' => $codePath,
+            'request' => [
+                'project_id' => $projectId,
+                'method' => $method,
+                'headers' => $headers,
+                'query' => $query,
+                'body' => $body,
+                'function' => $this->publicFunctionShape($function),
+                'auth' => $auth,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $process = proc_open([
+            PHP_BINARY,
+            '-d',
+            'open_basedir=' . __DIR__ . PATH_SEPARATOR . $sandboxDir,
+            '-d',
+            'memory_limit=' . $memoryLimit,
+            '-d',
+            'display_errors=0',
+            '-d',
+            'log_errors=0',
+            '-d',
+            'disable_functions=exec,passthru,shell_exec,system,proc_open,popen,pcntl_exec,pcntl_fork,putenv,mail,link,symlink,readlink,realpath,glob,scandir,opendir,readdir,dir',
+            __DIR__ . '/SandboxRunner.php',
+        ], [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+
+        if (!is_resource($process)) {
+            return FunctionResponse::json(['error' => 'Unable to start function sandbox'], 500);
+        }
+
+        fwrite($pipes[0], $input ?: '{}');
+        fclose($pipes[0]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $stdout = '';
+        $stderr = '';
+        $deadline = microtime(true) + $timeout;
+        $exitCode = null;
+
+        while (true) {
+            $stdout .= stream_get_contents($pipes[1]) ?: '';
+            $stderr .= stream_get_contents($pipes[2]) ?: '';
+
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = $status['exitcode'];
+                break;
+            }
+
+            if (microtime(true) >= $deadline) {
+                proc_terminate($process);
+                foreach ([1, 2] as $index) {
+                    fclose($pipes[$index]);
+                }
+                proc_close($process);
+
+                return FunctionResponse::json(['error' => 'Function execution timed out'], 504);
+            }
+
+            usleep(50000);
+        }
+
+        foreach ([1, 2] as $index) {
+            $stdout .= stream_get_contents($pipes[$index]) ?: '';
+            fclose($pipes[$index]);
+        }
+        proc_close($process);
+
+        if ($exitCode !== 0) {
+            return FunctionResponse::json(['error' => trim($stderr) ?: 'Function execution failed'], 500);
+        }
+
+        $payload = json_decode($stdout, true);
+        if (!is_array($payload)) {
+            return FunctionResponse::json(['error' => 'Function returned an invalid response'], 500);
+        }
+
+        $this->markInvoked((int) $function['id']);
+
+        return new FunctionResponse(
+            $payload['body'] ?? null,
+            (int) ($payload['status'] ?? 200),
+            is_array($payload['headers'] ?? null) ? $payload['headers'] : [],
+        );
+    }
+
+    private function sandboxDir(int $projectId, string $slug): string
+    {
+        return sys_get_temp_dir() . '/loxodontu-edge-functions/' . $projectId . '/' . preg_replace('/[^a-zA-Z0-9_-]/', '', $slug);
+    }
+
+    /** @param array<string, mixed> $function */
+    private function publicFunctionShape(array $function): array
+    {
+        unset($function['source_code'], $function['handler']);
+
+        return $function;
     }
 }

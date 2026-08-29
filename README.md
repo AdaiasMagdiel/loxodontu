@@ -138,23 +138,29 @@ means an anonymous caller, for which any RLS condition referencing `$auth.*` nev
 
 ### Edge functions
 
-Edge functions are project-scoped PHP callbacks exposed through the API. The name is intentionally
-familiar, but the implementation is PHP-first: functions are autoloadable classes/methods running
-inside the same application, which keeps the feature usable on shared hosting without Deno,
-containers, or a separate function runtime.
+Edge functions are project-scoped PHP functions exposed through the API. The name is intentionally
+familiar, but the implementation is PHP-first: functions run as PHP source code managed by the
+project, which keeps the feature usable on shared hosting without Deno, containers, or a separate
+function runtime.
 
-The first implementation registers function metadata instead of accepting arbitrary PHP code from
-the dashboard. That is deliberate. Running user-submitted PHP safely requires a stronger isolation
-model than normal shared hosting can guarantee, so the current design favors explicit callbacks
-that the project owner deploys with the application.
+Functions can be created from the dashboard by writing or pasting PHP code, or by uploading a PHP
+file. The UI generates the `slug` from the function name while you type, and the slug can still be
+edited before saving.
+
+User-provided function source is executed in a separate PHP process with a short timeout, memory
+limit, `open_basedir` restricted to the function sandbox/runtime files, and common dangerous
+functions disabled. This is a pragmatic shared-hosting sandbox, not the same security boundary as a
+container, VM, or dedicated isolate. It is designed to reduce filesystem/path discovery and host
+access while keeping the feature deployable in plain PHP environments.
 
 Each function has:
 
 - `slug` — the public route segment.
-- `handler` — a callable target using `ClassName::method`.
+- `source_code` — the PHP source for the function.
 - `methods` — allowed HTTP methods. An empty list allows any supported method.
 - `require_api_key` — whether external callers need a project API key with `function` permission.
 - `enabled` — whether the function can be invoked.
+- `timeout_seconds` and `memory_limit_mb` — per-invocation safety limits.
 
 Platform-authenticated management endpoints:
 
@@ -181,32 +187,28 @@ curl -X POST "$APP_URL/api/v1/projects/1/functions" \
   -d '{
     "name": "Daily cleanup",
     "slug": "daily-cleanup",
-    "handler": "App\\Jobs\\DailyCleanup::handle",
+    "source_code": "<?php\n\nuse App\\Edge\\FunctionRequest;\nuse App\\Edge\\FunctionResponse;\n\nreturn function (FunctionRequest $request): FunctionResponse {\n    return FunctionResponse::json([\"ok\" => true, \"payload\" => $request->body]);\n};\n",
     "methods": ["POST"],
     "require_api_key": true,
-    "enabled": true
+    "enabled": true,
+    "timeout_seconds": 10,
+    "memory_limit_mb": 32
   }'
 ```
 
-Example handler:
+Example function source:
 
 ```php
-namespace App\Jobs;
-
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
 
-class DailyCleanup
-{
-    public static function handle(FunctionRequest $request): FunctionResponse
-    {
-        return FunctionResponse::json([
-            'ok' => true,
-            'project_id' => $request->projectId,
-            'payload' => $request->body,
-        ]);
-    }
-}
+return function (FunctionRequest $request): FunctionResponse {
+    return FunctionResponse::json([
+        'ok' => true,
+        'project_id' => $request->projectId,
+        'payload' => $request->body,
+    ]);
+};
 ```
 
 External invocation requires a project API key with the `function` permission when

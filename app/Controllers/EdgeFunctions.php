@@ -59,18 +59,21 @@ class EdgeFunctions
         try {
             $stmt = $pdo->prepare(
                 'INSERT INTO project_functions
-                 (project_id, slug, name, description, handler, methods, require_api_key, enabled)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                 (project_id, slug, name, description, handler, source_code, methods, require_api_key, enabled, timeout_seconds, memory_limit_mb)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $project['id'],
                 $slug,
                 trim($body['name']),
                 trim($body['description'] ?? '') ?: null,
-                trim($body['handler']),
+                isset($body['handler']) ? trim((string) $body['handler']) : null,
+                (string) $body['source_code'],
                 $methods !== [] ? json_encode($methods) : null,
                 isset($body['require_api_key']) ? (int) (bool) $body['require_api_key'] : 1,
                 isset($body['enabled']) ? (int) (bool) $body['enabled'] : 1,
+                isset($body['timeout_seconds']) ? (int) $body['timeout_seconds'] : 10,
+                isset($body['memory_limit_mb']) ? (int) $body['memory_limit_mb'] : 32,
             ]);
         } catch (\PDOException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
@@ -125,7 +128,7 @@ class EdgeFunctions
 
         $fields = [];
         $values = [];
-        foreach (['slug', 'name', 'description', 'handler', 'methods', 'require_api_key', 'enabled'] as $field) {
+        foreach (['slug', 'name', 'description', 'handler', 'source_code', 'methods', 'require_api_key', 'enabled', 'timeout_seconds', 'memory_limit_mb'] as $field) {
             if (!array_key_exists($field, $body)) {
                 continue;
             }
@@ -136,6 +139,8 @@ class EdgeFunctions
                 'description' => trim((string) $body[$field]) ?: null,
                 'methods' => self::methods($body[$field]) !== [] ? json_encode(self::methods($body[$field])) : null,
                 'require_api_key', 'enabled' => (int) (bool) $body[$field],
+                'timeout_seconds' => (int) $body[$field],
+                'memory_limit_mb' => (int) $body[$field],
                 default => trim((string) $body[$field]),
             };
         }
@@ -231,8 +236,19 @@ class EdgeFunctions
             return 'name is required';
         }
 
-        if (trim($body['handler'] ?? '') === '' || !str_contains((string) $body['handler'], '::')) {
+        $hasSource = trim((string) ($body['source_code'] ?? '')) !== '';
+        $hasHandler = trim((string) ($body['handler'] ?? '')) !== '';
+
+        if (!$hasSource && !$hasHandler) {
+            return 'source_code is required';
+        }
+
+        if ($hasHandler && !str_contains((string) $body['handler'], '::')) {
             return 'handler must use ClassName::method syntax';
+        }
+
+        if ($hasSource && !str_starts_with(ltrim((string) $body['source_code']), '<?php')) {
+            return 'source_code must be a PHP file starting with <?php';
         }
 
         if (array_key_exists('methods', $body) && !is_array($body['methods']) && !is_string($body['methods'])) {
@@ -243,6 +259,14 @@ class EdgeFunctions
             if (!in_array($method, self::METHODS, true)) {
                 return 'methods must contain only: ' . implode(', ', self::METHODS);
             }
+        }
+
+        if (isset($body['timeout_seconds']) && ((int) $body['timeout_seconds'] < 1 || (int) $body['timeout_seconds'] > 60)) {
+            return 'timeout_seconds must be between 1 and 60';
+        }
+
+        if (isset($body['memory_limit_mb']) && ((int) $body['memory_limit_mb'] < 16 || (int) $body['memory_limit_mb'] > 256)) {
+            return 'memory_limit_mb must be between 16 and 256';
         }
 
         return null;
@@ -355,6 +379,12 @@ class EdgeFunctions
         $function['methods'] = $function['methods'] !== null ? json_decode($function['methods'], true) : [];
         $function['require_api_key'] = (bool) $function['require_api_key'];
         $function['enabled'] = (bool) $function['enabled'];
+        if (array_key_exists('timeout_seconds', $function)) {
+            $function['timeout_seconds'] = (int) $function['timeout_seconds'];
+        }
+        if (array_key_exists('memory_limit_mb', $function)) {
+            $function['memory_limit_mb'] = (int) $function['memory_limit_mb'];
+        }
 
         return $function;
     }
