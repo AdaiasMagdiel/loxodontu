@@ -112,6 +112,157 @@ PHP;
     expect(json($response))->toMatchArray(['ok' => true, 'method' => 'GET']);
 });
 
+test('rejects invalid edge function payloads', function (array $payload, string $message) {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => $payload,
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+    expect(json($response)['error'])->toBe($message);
+})->with([
+    [['name' => 'Bad', 'slug' => 'bad slug', 'source_code' => edgeFunctionSource()], 'slug must contain only letters, numbers, dashes, and underscores'],
+    [['name' => '', 'slug' => 'bad', 'source_code' => edgeFunctionSource()], 'name is required'],
+    [['name' => 'Bad', 'slug' => 'bad'], 'source_code is required'],
+    [['name' => 'Bad', 'slug' => 'bad', 'source_code' => 'return [];'], 'source_code must be a PHP file starting with <?php'],
+    [['name' => 'Bad', 'slug' => 'bad', 'source_code' => edgeFunctionSource(), 'methods' => 123], 'methods must be an array'],
+    [['name' => 'Bad', 'slug' => 'bad', 'source_code' => edgeFunctionSource(), 'methods' => ['OPTIONS']], 'methods must contain only: GET, POST, PUT, PATCH, DELETE'],
+    [['name' => 'Bad', 'slug' => 'bad', 'source_code' => edgeFunctionSource(), 'timeout_seconds' => 0], 'timeout_seconds must be between 1 and 60'],
+    [['name' => 'Bad', 'slug' => 'bad', 'source_code' => edgeFunctionSource(), 'memory_limit_mb' => 8], 'memory_limit_mb must be between 16 and 256'],
+]);
+
+test('updates shows and deletes edge functions', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $created = api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Hello',
+            'slug' => 'hello',
+            'description' => 'Initial',
+            'source_code' => edgeFunctionSource(),
+            'methods' => ['POST'],
+        ],
+    ]);
+    $function = json($created);
+
+    $show = api()->get("/api/v1/projects/{$project['id']}/functions/{$function['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    expect($show->getStatusCode())->toBe(200);
+    expect(json($show))->toMatchArray(['slug' => 'hello', 'description' => 'Initial']);
+
+    $updated = api()->patch("/api/v1/projects/{$project['id']}/functions/{$function['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Updated',
+            'slug' => 'updated',
+            'description' => '',
+            'methods' => [],
+            'require_api_key' => false,
+            'enabled' => false,
+            'timeout_seconds' => 5,
+            'memory_limit_mb' => 64,
+        ],
+    ]);
+
+    expect($updated->getStatusCode())->toBe(200);
+    expect(json($updated))->toMatchArray([
+        'name' => 'Updated',
+        'slug' => 'updated',
+        'description' => null,
+        'methods' => [],
+        'require_api_key' => false,
+        'enabled' => false,
+        'timeout_seconds' => 5,
+        'memory_limit_mb' => 64,
+    ]);
+
+    $deleted = api()->delete("/api/v1/projects/{$project['id']}/functions/{$function['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    expect($deleted->getStatusCode())->toBe(204);
+});
+
+test('edge function management returns useful errors', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Hello',
+            'slug' => 'hello',
+            'source_code' => edgeFunctionSource(),
+            'methods' => ['POST'],
+        ],
+    ]);
+
+    $duplicate = api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Hello again',
+            'slug' => 'hello',
+            'source_code' => edgeFunctionSource(),
+        ],
+    ]);
+    expect($duplicate->getStatusCode())->toBe(409);
+
+    $missingShow = api()->get("/api/v1/projects/{$project['id']}/functions/999999", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    expect($missingShow->getStatusCode())->toBe(404);
+
+    $existing = api()->get("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    $function = json($existing)[0];
+
+    $emptyUpdate = api()->patch("/api/v1/projects/{$project['id']}/functions/{$function['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [],
+    ]);
+    expect($emptyUpdate->getStatusCode())->toBe(422);
+
+    $missingDelete = api()->delete("/api/v1/projects/{$project['id']}/functions/999999", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    expect($missingDelete->getStatusCode())->toBe(404);
+
+    $wrongProject = api()->get('/api/v1/projects/prj_missing/functions', [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    expect($wrongProject->getStatusCode())->toBe(404);
+});
+
+test('invokes public edge functions without an api key', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Public Hello',
+            'slug' => 'public_hello',
+            'source_code' => edgeFunctionSource(),
+            'methods' => ['GET'],
+            'require_api_key' => false,
+        ],
+    ]);
+
+    $response = api()->get("/api/v1/{$project['id']}/functions/public_hello?name=adaias");
+
+    expect($response->getStatusCode())->toBe(200);
+    expect(json($response))->toMatchArray([
+        'ok' => true,
+        'message' => 'hello',
+    ]);
+});
+
 test('invokes an edge function with a project api key that has function permission', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);

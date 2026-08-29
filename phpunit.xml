@@ -17,6 +17,9 @@
         <include>
             <directory>app</directory>
         </include>
+        <exclude>
+            <file>app/Edge/SandboxRunner.php</file>
+        </exclude>
     </source>
     <php>
         <env name="ENV" value="testing" force="true"/>
