@@ -118,6 +118,10 @@ class EdgeFunctionRunner
         if (!is_dir($sandboxDir) && !mkdir($sandboxDir, 0700, true)) {
             return FunctionResponse::json(['error' => 'Unable to prepare function sandbox'], 500);
         }
+        $runtimeDir = $this->prepareRuntimeDir();
+        if ($runtimeDir === null) {
+            return FunctionResponse::json(['error' => 'Unable to prepare function sandbox runtime'], 500);
+        }
 
         $codePath = $sandboxDir . '/index_' . hash('sha256', (string) $function['source_code']) . '.php';
         file_put_contents($codePath, (string) $function['source_code']);
@@ -142,7 +146,7 @@ class EdgeFunctionRunner
             $phpBinary,
             '-q',
             '-d',
-            'open_basedir=' . __DIR__ . PATH_SEPARATOR . $sandboxDir,
+            'open_basedir=' . $runtimeDir . PATH_SEPARATOR . $sandboxDir,
             '-d',
             'memory_limit=' . $memoryLimit,
             '-d',
@@ -150,8 +154,10 @@ class EdgeFunctionRunner
             '-d',
             'log_errors=0',
             '-d',
+            'allow_url_fopen=0',
+            '-d',
             'disable_functions=exec,passthru,shell_exec,system,proc_open,popen,pcntl_exec,pcntl_fork,putenv,mail,link,symlink,readlink,realpath,glob,scandir,opendir,readdir,dir',
-            __DIR__ . '/SandboxRunner.php',
+            $runtimeDir . '/SandboxRunner.php',
         ], [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
@@ -259,6 +265,32 @@ class EdgeFunctionRunner
         }
 
         return PHP_BINARY;
+    }
+
+    private function prepareRuntimeDir(): ?string
+    {
+        $runtimeDir = sys_get_temp_dir() . '/loxodontu-edge-runtime/' . hash('sha256', __DIR__);
+        if (!is_dir($runtimeDir) && !mkdir($runtimeDir, 0700, true)) {
+            return null;
+        }
+
+        foreach (['SandboxRunner.php', 'FunctionRequest.php', 'FunctionResponse.php', 'Http.php'] as $file) {
+            $source = __DIR__ . '/' . $file;
+            $target = $runtimeDir . '/' . $file;
+
+            if (!is_file($source)) {
+                return null;
+            }
+
+            if (!is_file($target) || hash_file('sha256', $source) !== hash_file('sha256', $target)) {
+                if (!copy($source, $target)) {
+                    return null;
+                }
+                chmod($target, 0600);
+            }
+        }
+
+        return $runtimeDir;
     }
 
     private function invalidSandboxResponse(string $stdout, string $stderr, ?int $exitCode, ?string $jsonError, string $phpBinary): FunctionResponse

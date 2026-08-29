@@ -147,10 +147,11 @@ file. The UI generates the `slug` from the function name while you type, and the
 edited before saving.
 
 User-provided function source is executed in a separate PHP process with a short timeout, memory
-limit, `open_basedir` restricted to the function sandbox/runtime files, and common dangerous
-functions disabled. This is a pragmatic shared-hosting sandbox, not the same security boundary as a
-container, VM, or dedicated isolate. It is designed to reduce filesystem/path discovery and host
-access while keeping the feature deployable in plain PHP environments.
+limit, an isolated temporary runtime, `open_basedir` restricted to the function sandbox/runtime
+files, `allow_url_fopen` disabled, and common dangerous functions disabled. This is a pragmatic
+shared-hosting sandbox, not the same security boundary as a container, VM, or dedicated isolate. It is
+designed to reduce filesystem/path discovery and host access while keeping the feature deployable in
+plain PHP environments.
 
 Each function has:
 
@@ -200,15 +201,22 @@ Example function source:
 ```php
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
+use App\Edge\Http;
 
 return function (FunctionRequest $request): FunctionResponse {
+    $result = Http::get('https://example.com');
+
     return FunctionResponse::json([
         'ok' => true,
         'project_id' => $request->projectId,
         'payload' => $request->body,
+        'external_status' => $result['status'],
     ]);
 };
 ```
+
+Use `App\Edge\Http` for outbound HTTP calls. Direct filesystem URL wrappers such as
+`file_get_contents('https://example.com')` are disabled inside the sandbox.
 
 External invocation requires a project API key with the `function` permission when
 `require_api_key` is enabled:

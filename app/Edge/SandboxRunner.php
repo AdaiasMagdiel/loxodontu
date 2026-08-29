@@ -5,6 +5,7 @@ use App\Edge\FunctionResponse;
 
 require_once __DIR__ . '/FunctionRequest.php';
 require_once __DIR__ . '/FunctionResponse.php';
+require_once __DIR__ . '/Http.php';
 
 $input = json_decode(stream_get_contents(STDIN), true);
 

@@ -170,6 +170,52 @@ test('uses configured php binary for sandbox processes', function () {
     unset($_ENV['EDGE_PHP_BINARY']);
 });
 
+test('invokes source functions inside an isolated runtime', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $source = <<<'PHP'
+<?php
+
+use App\Edge\FunctionRequest;
+use App\Edge\FunctionResponse;
+use App\Edge\Http;
+
+return function (FunctionRequest $request): FunctionResponse {
+    $appEdgeFile = getcwd() . '/app/Edge/FunctionRequest.php';
+
+    return FunctionResponse::json([
+        'allow_url_fopen' => ini_get('allow_url_fopen'),
+        'http_helper_loaded' => class_exists(Http::class),
+        'open_basedir' => ini_get('open_basedir'),
+        'can_read_app_edge_file' => @file_get_contents($appEdgeFile) !== false,
+    ]);
+};
+PHP;
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Sandbox Check',
+            'slug' => 'sandbox_check',
+            'source_code' => $source,
+            'methods' => ['GET'],
+        ],
+    ]);
+
+    $response = api()->get("/api/v1/{$project['id']}/functions/sandbox_check", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+    $body = json($response);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect($body['allow_url_fopen'])->toBe('0');
+    expect($body['http_helper_loaded'])->toBeTrue();
+    expect($body['open_basedir'])->not->toContain('/app/Edge');
+    expect($body['open_basedir'])->toContain('/loxodontu-edge-runtime/');
+    expect($body['can_read_app_edge_file'])->toBeFalse();
+});
+
 test('rejects invalid edge function payloads', function (array $payload, string $message) {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);
