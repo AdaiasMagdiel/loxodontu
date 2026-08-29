@@ -204,9 +204,10 @@ class EdgeFunctionRunner
             return FunctionResponse::json(['error' => trim($stderr) ?: 'Function execution failed'], 500);
         }
 
-        $payload = $this->decodeSandboxPayload($stdout);
+        $jsonError = null;
+        $payload = $this->decodeSandboxPayload($stdout, $jsonError);
         if (!is_array($payload)) {
-            return FunctionResponse::json(['error' => 'Function returned an invalid response'], 500);
+            return $this->invalidSandboxResponse($stdout, $stderr, $exitCode, $jsonError);
         }
 
         $this->markInvoked((int) $function['id']);
@@ -218,13 +219,17 @@ class EdgeFunctionRunner
         );
     }
 
-    /** @return array<string, mixed>|null */
-    private function decodeSandboxPayload(string $stdout): ?array
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function decodeSandboxPayload(string $stdout, ?string &$jsonError = null): ?array
     {
         $payload = json_decode($stdout, true);
         if (is_array($payload)) {
+            $jsonError = null;
             return $payload;
         }
+        $jsonError = json_last_error_msg();
 
         $start = strpos($stdout, '{');
         $end = strrpos($stdout, '}');
@@ -233,8 +238,30 @@ class EdgeFunctionRunner
         }
 
         $payload = json_decode(substr($stdout, $start, $end - $start + 1), true);
+        $jsonError = is_array($payload) ? null : json_last_error_msg();
 
         return is_array($payload) ? $payload : null;
+    }
+
+    private function invalidSandboxResponse(string $stdout, string $stderr, ?int $exitCode, ?string $jsonError): FunctionResponse
+    {
+        $body = ['error' => 'Function returned an invalid response'];
+
+        if (env('DEBUG') === 'true') {
+            $body['debug'] = [
+                'php_binary' => PHP_BINARY,
+                'php_sapi' => PHP_SAPI,
+                'exit_code' => $exitCode,
+                'json_error' => $jsonError,
+                'stdout_length' => strlen($stdout),
+                'stderr_length' => strlen($stderr),
+                'stdout_preview' => mb_substr($stdout, 0, 4000),
+                'stderr_preview' => mb_substr($stderr, 0, 4000),
+                'stdout_base64_preview' => base64_encode(substr($stdout, 0, 4000)),
+            ];
+        }
+
+        return FunctionResponse::json($body, 500);
     }
 
     private function sandboxDir(int $projectId, string $slug): string

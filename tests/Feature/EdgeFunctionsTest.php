@@ -115,17 +115,45 @@ PHP;
 test('decodes sandbox payloads with cgi headers before json', function () {
     $runner = new App\Edge\EdgeFunctionRunner(App\Database::getConn('default'));
     $method = new ReflectionMethod($runner, 'decodeSandboxPayload');
-
-    $payload = $method->invoke($runner, "Content-type: text/html; charset=UTF-8\r\n\r\n" . json_encode([
+    $error = null;
+    $stdout = "Content-type: text/html; charset=UTF-8\r\n\r\n" . json_encode([
         'status' => 200,
         'headers' => ['Content-Type' => 'application/json'],
         'body' => ['ok' => true],
-    ]));
+    ]);
+    $args = [$stdout, &$error];
+
+    $payload = $method->invokeArgs($runner, $args);
 
     expect($payload)->toMatchArray([
         'status' => 200,
         'body' => ['ok' => true],
     ]);
+    expect($error)->toBeNull();
+});
+
+test('includes invalid sandbox output details when debug is enabled', function () {
+    putenv('DEBUG=true');
+    $_ENV['DEBUG'] = 'true';
+
+    $runner = new App\Edge\EdgeFunctionRunner(App\Database::getConn('default'));
+    $method = new ReflectionMethod($runner, 'invalidSandboxResponse');
+
+    $response = $method->invoke($runner, 'not json', 'stderr text', 0, 'Syntax error');
+
+    expect($response->status)->toBe(500);
+    expect($response->body['error'])->toBe('Function returned an invalid response');
+    expect($response->body['debug'])->toMatchArray([
+        'exit_code' => 0,
+        'json_error' => 'Syntax error',
+        'stdout_length' => 8,
+        'stderr_length' => 11,
+        'stdout_preview' => 'not json',
+        'stderr_preview' => 'stderr text',
+    ]);
+
+    putenv('DEBUG=false');
+    $_ENV['DEBUG'] = 'false';
 });
 
 test('rejects invalid edge function payloads', function (array $payload, string $message) {
