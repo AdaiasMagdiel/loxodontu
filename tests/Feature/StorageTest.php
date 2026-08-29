@@ -190,3 +190,211 @@ test('uploading a duplicate path in the same bucket is rejected', function () {
 
     expect($response->getStatusCode())->toBe(409);
 });
+
+test('uploading without a file, or with an empty path, is rejected', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $key     = createApiKey($owner['token'], $project['id'], ['storage:insert']);
+
+    $noFile = api()->post("/api/v1/{$project['id']}/storage/{$bucket['name']}", [
+        'headers'     => ['Authorization' => "Bearer {$key['key']}"],
+        'form_params' => ['path' => 'a.txt'],
+    ]);
+    expect($noFile->getStatusCode())->toBe(422);
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'loxodontu-upload-');
+    file_put_contents($tmpFile, 'x');
+
+    $noPath = api()->post("/api/v1/{$project['id']}/storage/{$bucket['name']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+        'files'   => [
+            'file' => ['name' => '', 'type' => 'text/plain', 'tmp_name' => $tmpFile, 'error' => 0, 'size' => 1],
+        ],
+    ]);
+    expect($noPath->getStatusCode())->toBe(422);
+});
+
+test('rejects a bucket name that is not a valid identifier', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/storage/buckets", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['name' => 'not a valid name!'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('bucket index/store/update/destroy all 404 for a project the caller does not own', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $intruder = registerPlatformUser();
+
+    $index = api()->get("/api/v1/projects/{$project['id']}/storage/buckets", [
+        'headers' => ['Authorization' => "Bearer {$intruder['token']}"],
+    ]);
+    expect($index->getStatusCode())->toBe(404);
+
+    $store = api()->post("/api/v1/projects/{$project['id']}/storage/buckets", [
+        'headers' => ['Authorization' => "Bearer {$intruder['token']}"],
+        'json'    => ['name' => 'x'],
+    ]);
+    expect($store->getStatusCode())->toBe(404);
+
+    $update = api()->patch("/api/v1/projects/{$project['id']}/storage/buckets/{$bucket['id']}", [
+        'headers' => ['Authorization' => "Bearer {$intruder['token']}"],
+        'json'    => ['public' => true],
+    ]);
+    expect($update->getStatusCode())->toBe(404);
+
+    $destroy = api()->delete("/api/v1/projects/{$project['id']}/storage/buckets/{$bucket['id']}", [
+        'headers' => ['Authorization' => "Bearer {$intruder['token']}"],
+    ]);
+    expect($destroy->getStatusCode())->toBe(404);
+});
+
+test('updating a bucket without a public field is rejected', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+
+    $response = api()->patch("/api/v1/projects/{$project['id']}/storage/buckets/{$bucket['id']}", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => [],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+});
+
+test('a scoped api key can rename an object, but not to a path already taken', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $key     = createApiKey($owner['token'], $project['id'], ['storage:insert', 'storage:update']);
+
+    $objectA = json(uploadObject($key['key'], $project['id'], $bucket['name'], 'a.txt'));
+    $objectB = json(uploadObject($key['key'], $project['id'], $bucket['name'], 'b.txt'));
+
+    $rename = api()->patch("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$objectA['id']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+        'json'    => ['path' => 'a-renamed.txt'],
+    ]);
+    expect($rename->getStatusCode())->toBe(200);
+    expect(json($rename)['path'])->toBe('a-renamed.txt');
+
+    $conflict = api()->patch("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$objectA['id']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+        'json'    => ['path' => 'b.txt'],
+    ]);
+    expect($conflict->getStatusCode())->toBe(409);
+
+    $missingPath = api()->patch("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$objectA['id']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+        'json'    => ['path' => ''],
+    ]);
+    expect($missingPath->getStatusCode())->toBe(422);
+
+    $notFound = api()->patch("/api/v1/{$project['id']}/storage/{$bucket['name']}/999999", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+        'json'    => ['path' => 'whatever.txt'],
+    ]);
+    expect($notFound->getStatusCode())->toBe(404);
+});
+
+test('a key or bucket that does not exist is unauthorized/not found on the passthrough', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $key     = createApiKey($owner['token'], $project['id'], ['storage:select']);
+
+    $noAuth = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}");
+    expect($noAuth->getStatusCode())->toBe(401);
+
+    $badKey = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}", [
+        'headers' => ['Authorization' => 'Bearer totally-bogus-key'],
+    ]);
+    expect($badKey->getStatusCode())->toBe(401);
+
+    $badProject = api()->get("/api/v1/does-not-exist/storage/{$bucket['name']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+    ]);
+    expect($badProject->getStatusCode())->toBe(404);
+
+    $badBucket = api()->get("/api/v1/{$project['id']}/storage/does-not-exist", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+    ]);
+    expect($badBucket->getStatusCode())->toBe(404);
+});
+
+test('the public download route 404s for a project or object that does not exist', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id'], null, true);
+
+    $badProject = api()->get("/api/v1/does-not-exist/storage/public/{$bucket['name']}/1");
+    expect($badProject->getStatusCode())->toBe(404);
+
+    $missingObject = api()->get("/api/v1/{$project['id']}/storage/public/{$bucket['name']}/999999");
+    expect($missingObject->getStatusCode())->toBe(404);
+});
+
+test('downloading an object whose file is missing from disk 404s', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $key     = createApiKey($owner['token'], $project['id'], ['storage:insert', 'storage:select']);
+    $object  = json(uploadObject($key['key'], $project['id'], $bucket['name'], 'ghost.txt'));
+
+    LocalDisk::delete(projectInternalId($project['id']), $bucket['id'], $object['id']);
+
+    $response = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$object['id']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}"],
+    ]);
+    expect($response->getStatusCode())->toBe(404);
+});
+
+test('storage policies can deny list/insert/update entirely for a role-restricted operation', function () {
+    $owner   = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $bucket  = createBucket($owner['token'], $project['id']);
+    $key     = createApiKey($owner['token'], $project['id'], ['storage:select', 'storage:insert', 'storage:update']);
+
+    createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
+        'operation' => 'SELECT', 'role' => 'manager', 'conditions' => [],
+    ]);
+    createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
+        'operation' => 'INSERT', 'role' => 'manager', 'conditions' => [],
+    ]);
+    createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
+        'operation' => 'UPDATE', 'role' => 'manager', 'conditions' => [],
+    ]);
+
+    $plainUser = registerEndUser($project['id']);
+
+    $deniedUpload = uploadObject($key['key'], $project['id'], $bucket['name'], 'x.txt', 'x', 'text/plain', [
+        'X-User-Token' => $plainUser['token'],
+    ]);
+    expect($deniedUpload->getStatusCode())->toBe(403);
+
+    $deniedList = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}", 'X-User-Token' => $plainUser['token']],
+    ]);
+    expect($deniedList->getStatusCode())->toBe(403);
+
+    $manager = registerEndUser($project['id']);
+    setEndUserRole($owner['token'], $project['id'], $manager['user']['id'], 'manager');
+    $object = json(uploadObject($key['key'], $project['id'], $bucket['name'], 'ok.txt', 'ok', 'text/plain', [
+        'X-User-Token' => $manager['token'],
+    ]));
+
+    // A denied UPDATE hides behind a 404 (same "can't even see it" semantics as REST
+    // passthrough's RLS-scoped PATCH/DELETE), unlike the flat 403 on insert/list above.
+    $deniedUpdate = api()->patch("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$object['id']}", [
+        'headers' => ['Authorization' => "Bearer {$key['key']}", 'X-User-Token' => $plainUser['token']],
+        'json'    => ['path' => 'renamed.txt'],
+    ]);
+    expect($deniedUpdate->getStatusCode())->toBe(404);
+});
