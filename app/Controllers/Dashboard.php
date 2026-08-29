@@ -64,6 +64,22 @@ class Dashboard
         ]);
     }
 
+    public static function projectFunctions(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/projects/functions'), [
+            'activeNav' => 'functions',
+            'projectId' => (int) $params->project_id,
+        ]);
+    }
+
+    public static function projectCronJobs(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/projects/cron-jobs'), [
+            'activeNav' => 'cron-jobs',
+            'projectId' => (int) $params->project_id,
+        ]);
+    }
+
     public static function projectEndUsers(Request $req, Response $res, stdClass $params): Response
     {
         return $res->withTemplate(t('dashboard/projects/end-users'), [

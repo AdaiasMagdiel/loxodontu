@@ -84,7 +84,7 @@ ob_start();
             if (!store.auth) { location.href = '/dashboard'; return {}; }
 
             const PROJECT_ID = <?= (int) $projectId ?>;
-            const permissionOptions = ['select', 'insert', 'update', 'delete'];
+            const permissionOptions = ['select', 'insert', 'update', 'delete', 'function'];
 
             const project = Vue.ref(null);
             const keys = Vue.ref([]);

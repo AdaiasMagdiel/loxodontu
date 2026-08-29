@@ -1,7 +1,9 @@
 <?php
 
 use App\Controllers\Auth;
+use App\Controllers\CronJobs;
 use App\Controllers\Dashboard;
+use App\Controllers\EdgeFunctions;
 use App\Controllers\EndUsers;
 use App\Controllers\Keys;
 use App\Controllers\Projects;
@@ -23,6 +25,8 @@ $app->get('/dashboard/projects/[project_id]', [Dashboard::class, 'projectOvervie
 $app->get('/dashboard/projects/[project_id]/tables', [Dashboard::class, 'projectTables']);
 $app->get('/dashboard/projects/[project_id]/sql', [Dashboard::class, 'projectSql']);
 $app->get('/dashboard/projects/[project_id]/keys', [Dashboard::class, 'projectKeys']);
+$app->get('/dashboard/projects/[project_id]/functions', [Dashboard::class, 'projectFunctions']);
+$app->get('/dashboard/projects/[project_id]/cron-jobs', [Dashboard::class, 'projectCronJobs']);
 $app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
 
 $app->group('/api', function () use ($app) {
@@ -63,6 +67,21 @@ $app->group('/api', function () use ($app) {
         $app->post('/projects/[project_id]/keys', [Keys::class, 'store'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/keys/[key_id]', [Keys::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
 
+        // Cron jobs
+        $app->get('/projects/[project_id]/cron-jobs', [CronJobs::class, 'index'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/cron-jobs', [CronJobs::class, 'store'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/cron-jobs/[job_id]', [CronJobs::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->patch('/projects/[project_id]/cron-jobs/[job_id]', [CronJobs::class, 'update'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/projects/[project_id]/cron-jobs/[job_id]', [CronJobs::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/cron-jobs/[job_id]/runs', [CronJobs::class, 'runs'], [[PlatformAuth::class, 'handle']]);
+
+        // Edge functions
+        $app->get('/projects/[project_id]/functions', [EdgeFunctions::class, 'index'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/functions', [EdgeFunctions::class, 'store'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/functions/[function_id]', [EdgeFunctions::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->patch('/projects/[project_id]/functions/[function_id]', [EdgeFunctions::class, 'update'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/projects/[project_id]/functions/[function_id]', [EdgeFunctions::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+
         // RLS Policies
         $app->get('/projects/[project_id]/tables/[table_id]/rls-policies', [RlsPolicies::class, 'index'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects/[project_id]/tables/[table_id]/rls-policies', [RlsPolicies::class, 'store'], [[PlatformAuth::class, 'handle']]);
@@ -81,5 +100,8 @@ $app->group('/api', function () use ($app) {
         // REST passthrough
         $app->any('/[project_id]/rest/[table]', [Rest::class, 'dispatch']);
         $app->any('/[project_id]/rest/[table]/[id]', [Rest::class, 'dispatch']);
+
+        // Edge function invocation
+        $app->any('/[project_id]/functions/[slug]', [EdgeFunctions::class, 'invoke']);
     });
 });
