@@ -152,7 +152,7 @@ test('rolls back metadata when the physical table already exists', function () {
     $project = createProject($owner['token']);
     $name = uniqueSlug('t');
 
-    Database::getConn('default')->exec('CREATE TABLE `' . \App\Controllers\Tables::physicalName($project['id'], $name) . '` (id INT)');
+    Database::getConn('default')->exec('CREATE TABLE `' . \App\Controllers\Tables::physicalName(projectInternalId($project['id']), $name) . '` (id INT)');
 
     $response = api()->post("/api/v1/projects/{$project['id']}/tables", [
         'headers' => ['Authorization' => "Bearer {$owner['token']}"],

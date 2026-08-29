@@ -107,7 +107,7 @@ ob_start();
             const store = Vue.inject('store');
             if (!store.auth) { location.href = '/dashboard'; return {}; }
 
-            const PROJECT_ID = <?= (int) $projectId ?>;
+            const PROJECT_ID = <?= json_encode((string) $projectId) ?>;
             const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
             const project = Vue.ref(null);
             const functions = Vue.ref([]);

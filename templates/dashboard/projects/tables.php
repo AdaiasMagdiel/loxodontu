@@ -225,7 +225,7 @@ ob_start();
             const store = Vue.inject('store');
             if (!store.auth) { location.href = '/dashboard'; return {}; }
 
-            const PROJECT_ID = <?= (int) $projectId ?>;
+            const PROJECT_ID = <?= json_encode((string) $projectId) ?>;
 
             const columnTypes = ['text', 'longtext', 'integer', 'bigint', 'decimal', 'float', 'boolean', 'date', 'time', 'timestamp', 'json', 'uuid'];
             const rlsOperations = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
