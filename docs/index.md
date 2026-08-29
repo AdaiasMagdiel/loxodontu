@@ -1,4 +1,4 @@
-![Loxodontu](assets/font-loxodontu.svg){ .lx-wordmark width="360" }
+![Loxodontu](assets/banner-loxodontu.webp)
 
 Loxodontu is an open-source Backend-as-a-Service (BaaS) built with modern PHP. Designed as
 a lightweight, self-hostable alternative to Supabase and Firebase, it provides developers
