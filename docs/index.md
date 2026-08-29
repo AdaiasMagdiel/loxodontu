@@ -20,7 +20,8 @@ the box — leveraging the speed, simplicity, and ecosystem of PHP 8+.
 **New here?** Start with [Getting Started](getting-started.md) to run Loxodontu locally in a few
 minutes. Read [Philosophy](philosophy.md) for why the project is built this way, or jump straight
 into the [API Overview](api/overview.md). Deploying to shared hosting? See
-[Deployment](deployment.md).
+[Deployment](deployment.md). Building a frontend? See [Clients](clients.md) for the official
+JS/TS SDK.
 
 ## Built with
 
@@ -34,6 +35,12 @@ Loxodontu's core is three small, independent PHP libraries, also open-source:
   manage the database schema (see [Getting Started](getting-started.md#run-the-migrations)).
 
 Each one is usable on its own, outside of Loxodontu, in any PHP project.
+
+## Clients
+
+- **[@adaiasmagdiel/loxodontu](https://www.npmjs.com/package/@adaiasmagdiel/loxodontu)**
+  ([source](https://github.com/adaiasmagdiel/loxodontu-js)) — the official JavaScript/TypeScript
+  client, for both browsers and Node. See [Clients](clients.md).
 
 ## License
 

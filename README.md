@@ -20,6 +20,12 @@ Early development. Just started, no stable release yet, expect things to change.
 - **[fullcrawl](https://github.com/adaiasmagdiel/fullcrawl)** — the migration runner used to
   manage the database schema.
 
+## Clients
+
+- **[@adaiasmagdiel/loxodontu](https://www.npmjs.com/package/@adaiasmagdiel/loxodontu)**
+  ([source](https://github.com/adaiasmagdiel/loxodontu-js)) — the official JavaScript/TypeScript
+  client, for both browsers and Node.
+
 ## Testing
 
 Feature tests run against a real MySQL/MariaDB database via [Pest](https://pestphp.com/). Set the
