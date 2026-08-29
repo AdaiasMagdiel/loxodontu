@@ -53,18 +53,24 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
   - Philosophy: philosophy.md
+  - Configuration: configuration.md
+  - Deployment: deployment.md
   - Roadmap: roadmap.md
   - API:
       - Overview: api/overview.md
+      - Authentication & Tokens: api/authentication.md
       - Platform Auth: api/platform-auth.md
       - Projects: api/projects.md
       - Tables & Schema: api/tables.md
       - API Keys & RLS: api/keys-and-rls.md
       - End Users: api/end-users.md
       - REST Passthrough: api/rest-passthrough.md
+      - Errors & Responses: api/errors.md
   - Edge Functions: edge-functions.md
   - Cron Jobs: cron-jobs.md
+  - Dashboard: dashboard.md
   - Testing: testing.md
 
 extra:

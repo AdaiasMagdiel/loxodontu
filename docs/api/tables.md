@@ -12,3 +12,15 @@
 
 Column `type` is one of `text`, `integer`, `decimal`, `boolean`, `timestamp`, `json`. A column can
 never be named `id`, which is always the auto-incrementing primary key.
+
+## Running raw SQL
+
+| Method | Route                     | Description                        |
+| ------ | -------------------------- | ------------------------------------ |
+| POST   | `/projects/{id}/sql`       | Run arbitrary SQL against the project's tables (`{ query }`) |
+
+This runs whatever SQL you send directly against the underlying database, authenticated with your
+platform token — there is no query sanitization, statement whitelist, or RLS applied at this layer,
+since it's meant as a platform-owner escape hatch (the dashboard's SQL runner uses this endpoint).
+Treat the platform token like a database credential: anyone with it can read, write, or drop
+anything in the project.

@@ -17,8 +17,10 @@ the box — leveraging the speed, simplicity, and ecosystem of PHP 8+.
 - **Edge functions** — project-scoped PHP functions exposed over HTTP, sandboxed for shared hosting.
 - **Cron jobs** — scheduled, retryable jobs driven by a single `worker.php` entry point.
 
-Read [Philosophy](philosophy.md) for why the project is built this way, or jump straight into
-the [API Overview](api/overview.md).
+**New here?** Start with [Getting Started](getting-started.md) to run Loxodontu locally in a few
+minutes. Read [Philosophy](philosophy.md) for why the project is built this way, or jump straight
+into the [API Overview](api/overview.md). Deploying to shared hosting? See
+[Deployment](deployment.md).
 
 ## License
 

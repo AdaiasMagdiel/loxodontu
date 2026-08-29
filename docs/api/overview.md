@@ -9,3 +9,14 @@ Every list endpoint below (tables, keys, RLS policies, end users) is paginated t
 passthrough's own `GET` list endpoint is: `?limit=` (default 25, capped at 100) and `?offset=`
 (default 0), with the result's total/limit/offset echoed back as `X-Total-Count`, `X-Page-Limit`,
 and `X-Page-Offset` response headers.
+
+For request/response formatting, HTTP status codes, and how each auth token is structured and
+expires, see [Authentication & Tokens](authentication.md) and [Errors & Responses](errors.md).
+
+## Health check
+
+| Method | Route         | Auth | Description                        |
+| ------ | ------------- | ---- | ------------------------------------ |
+| GET    | `/api/health` | —    | Returns `{ "status": "ok" }` — useful for uptime checks and load balancer probes. |
+
+Note this route is outside `/api/v1`.
