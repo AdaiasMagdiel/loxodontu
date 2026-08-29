@@ -24,3 +24,6 @@ composer.phar
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Docs
+site/

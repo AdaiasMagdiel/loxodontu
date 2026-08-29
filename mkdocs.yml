@@ -1,0 +1,73 @@
+site_name: Loxodontu
+site_description: An open-source, self-hostable Backend-as-a-Service built with modern PHP.
+site_url: https://adaiasmagdiel.github.io/loxodontu/
+repo_name: adaiasmagdiel/loxodontu
+repo_url: https://github.com/adaiasmagdiel/loxodontu
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  logo: assets/logo-loxodontu.svg
+  favicon: assets/logo-loxodontu.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - attr_list
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Philosophy: philosophy.md
+  - Roadmap: roadmap.md
+  - API:
+      - Overview: api/overview.md
+      - Platform Auth: api/platform-auth.md
+      - Projects: api/projects.md
+      - Tables & Schema: api/tables.md
+      - API Keys & RLS: api/keys-and-rls.md
+      - End Users: api/end-users.md
+      - REST Passthrough: api/rest-passthrough.md
+  - Edge Functions: edge-functions.md
+  - Cron Jobs: cron-jobs.md
+  - Testing: testing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/adaiasmagdiel/loxodontu

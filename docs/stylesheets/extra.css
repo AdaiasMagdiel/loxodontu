@@ -1,0 +1,12 @@
+/* logo-loxodontu.svg and font-loxodontu.svg are drawn in solid black;
+   invert them in dark mode so they stay visible on a dark background. */
+[data-md-color-scheme="slate"] .md-header__button.md-logo img,
+[data-md-color-scheme="slate"] .md-nav__title .md-logo img,
+[data-md-color-scheme="slate"] img.lx-wordmark {
+  filter: invert(1);
+}
+
+.lx-wordmark {
+  display: block;
+  margin: 1.5rem auto;
+}
