@@ -25,6 +25,8 @@ Early development. Just started, no stable release yet, expect things to change.
 - **[@adaiasmagdiel/loxodontu](https://www.npmjs.com/package/@adaiasmagdiel/loxodontu)**
   ([source](https://github.com/adaiasmagdiel/loxodontu-js)) — the official JavaScript/TypeScript
   client, for both browsers and Node.
+- **[adaiasmagdiel/loxodontu-php](https://packagist.org/packages/adaiasmagdiel/loxodontu-php)**
+  ([source](https://github.com/AdaiasMagdiel/loxodontu-php)) — the official PHP client.
 
 ## Testing
 
