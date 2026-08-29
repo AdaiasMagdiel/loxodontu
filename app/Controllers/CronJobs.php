@@ -321,10 +321,10 @@ class CronJobs
         return null;
     }
 
-    private static function findOwnedProject(PDO $pdo, mixed $id, int $userId): array|false
+    private static function findOwnedProject(PDO $pdo, mixed $publicId, int $userId): array|false
     {
-        $stmt = $pdo->prepare('SELECT id FROM projects WHERE id = ? AND user_id = ? LIMIT 1');
-        $stmt->execute([$id, $userId]);
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$publicId, $userId]);
 
         return $stmt->fetch();
     }

@@ -3,7 +3,7 @@
 // Exercised through Tables::index — the pagination behavior itself (App\Pagination) is shared
 // verbatim by Keys::index, RlsPolicies::index, and EndUsers::index, checked for wiring below.
 
-function createTables(string $token, int $projectId, int $count): void
+function createTables(string $token, string $projectId, int $count): void
 {
     for ($i = 0; $i < $count; $i++) {
         createTable($token, $projectId, "t{$i}_" . uniqueSlug(), []);

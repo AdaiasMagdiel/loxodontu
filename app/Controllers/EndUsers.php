@@ -204,17 +204,17 @@ class EndUsers
         return $token;
     }
 
-    private static function findProject(\PDO $pdo, mixed $projectId): array|false
+    private static function findProject(\PDO $pdo, mixed $publicId): array|false
     {
-        $stmt = $pdo->prepare('SELECT id FROM projects WHERE id = ? LIMIT 1');
-        $stmt->execute([$projectId]);
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? LIMIT 1');
+        $stmt->execute([$publicId]);
         return $stmt->fetch();
     }
 
-    private static function findOwnedProject(\PDO $pdo, mixed $projectId, int $userId): array|false
+    private static function findOwnedProject(\PDO $pdo, mixed $publicId, int $userId): array|false
     {
-        $stmt = $pdo->prepare('SELECT id FROM projects WHERE id = ? AND user_id = ? LIMIT 1');
-        $stmt->execute([$projectId, $userId]);
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$publicId, $userId]);
         return $stmt->fetch();
     }
 }

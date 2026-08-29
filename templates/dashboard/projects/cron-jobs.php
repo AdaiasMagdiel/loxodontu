@@ -99,7 +99,7 @@ ob_start();
             const store = Vue.inject('store');
             if (!store.auth) { location.href = '/dashboard'; return {}; }
 
-            const PROJECT_ID = <?= (int) $projectId ?>;
+            const PROJECT_ID = <?= json_encode((string) $projectId) ?>;
             const project = Vue.ref(null);
             const jobs = Vue.ref([]);
             const functions = Vue.ref([]);

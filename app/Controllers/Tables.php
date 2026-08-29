@@ -652,12 +652,12 @@ class Tables
         }
     }
 
-    private static function findOwnedProject(\PDO $pdo, mixed $projectId, int $userId): array|false
+    private static function findOwnedProject(\PDO $pdo, mixed $publicId, int $userId): array|false
     {
         $stmt = $pdo->prepare(
-            'SELECT id FROM projects WHERE id = ? AND user_id = ? LIMIT 1'
+            'SELECT id FROM projects WHERE public_id = ? AND user_id = ? LIMIT 1'
         );
-        $stmt->execute([$projectId, $userId]);
+        $stmt->execute([$publicId, $userId]);
         return $stmt->fetch();
     }
 
@@ -678,15 +678,15 @@ class Tables
      * A table owned (transitively, via its project) by $userId, with its
      * physical table name pre-computed as `physical_name`.
      */
-    private static function findOwnedTable(\PDO $pdo, mixed $projectId, mixed $tableId, int $userId): array|false
+    private static function findOwnedTable(\PDO $pdo, mixed $publicProjectId, mixed $tableId, int $userId): array|false
     {
         $stmt = $pdo->prepare(
             'SELECT t.id, t.project_id, t.name FROM project_tables t
              INNER JOIN projects p ON p.id = t.project_id
-             WHERE t.id = ? AND t.project_id = ? AND p.user_id = ?
+             WHERE t.id = ? AND p.public_id = ? AND p.user_id = ?
              LIMIT 1'
         );
-        $stmt->execute([$tableId, $projectId, $userId]);
+        $stmt->execute([$tableId, $publicProjectId, $userId]);
         $table = $stmt->fetch();
 
         if (!$table) {

@@ -20,6 +20,16 @@ $app->set404Handler(function (Request $req, Response $res, stdClass $params) {
 $app->setExceptionHandler(Throwable::class, function (Request $req, Response $res, Throwable $e) {
     if (isDev()) throw $e;
 
+    error_log(sprintf(
+        '[%s] %s in %s:%d%s%s',
+        $req->getUri(),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine(),
+        PHP_EOL,
+        $e->getTraceAsString()
+    ));
+
     $res = $res->setStatusCode(500);
     $accept = $req->getHeader('Accept') ?? '';
 

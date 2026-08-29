@@ -163,15 +163,15 @@ class RlsPolicies
         return $res->setStatusCode(204);
     }
 
-    private static function findOwnedTable(\PDO $pdo, mixed $projectId, mixed $tableId, int $userId): array|false
+    private static function findOwnedTable(\PDO $pdo, mixed $publicProjectId, mixed $tableId, int $userId): array|false
     {
         $stmt = $pdo->prepare(
             'SELECT t.id FROM project_tables t
              INNER JOIN projects p ON p.id = t.project_id
-             WHERE t.id = ? AND t.project_id = ? AND p.user_id = ?
+             WHERE t.id = ? AND p.public_id = ? AND p.user_id = ?
              LIMIT 1'
         );
-        $stmt->execute([$tableId, $projectId, $userId]);
+        $stmt->execute([$tableId, $publicProjectId, $userId]);
         return $stmt->fetch();
     }
 

@@ -102,7 +102,7 @@ $projectNavItems = [
         .stat-value { font-family:'Oswald', sans-serif; font-weight:700; font-size:2rem; color:var(--text-main); line-height:1; }
 
         .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:100; padding:1rem; }
-        .modal-card { width:100%; max-width:28rem; background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:1.5rem; }
+        .modal-card { width:100%; max-width:28rem; max-height:calc(100vh - 2rem); overflow-y:auto; background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:1.5rem; }
         .modal-title { font-family:'Oswald', sans-serif; font-weight:700; font-size:1rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-main); margin-bottom:1rem; }
     </style>
     <script>

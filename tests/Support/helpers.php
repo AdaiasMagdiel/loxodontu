@@ -29,6 +29,20 @@ function registerPlatformUser(?string $email = null, string $password = 'passwor
     return json($response);
 }
 
+/**
+ * Resolves a project's internal numeric id from its public id. Only needed by
+ * tests that assert against the physical MySQL table name (which is keyed by
+ * the internal id, never the public one) — the API surface itself never
+ * exposes or accepts the internal id.
+ */
+function projectInternalId(string $publicId): int
+{
+    $stmt = App\Database::getConn('default')->prepare('SELECT id FROM projects WHERE public_id = ? LIMIT 1');
+    $stmt->execute([$publicId]);
+
+    return (int) $stmt->fetchColumn();
+}
+
 /** @return array{id: int, name: string, slug: string} */
 function createProject(string $token, ?string $name = null): array
 {
@@ -46,7 +60,7 @@ function createProject(string $token, ?string $name = null): array
  * @param array<int, array{name: string, type: string, nullable?: bool, default_value?: mixed}> $columns
  * @return array{id: int, name: string, columns: array}
  */
-function createTable(string $token, int $projectId, ?string $name = null, array $columns = []): array
+function createTable(string $token, string $projectId, ?string $name = null, array $columns = []): array
 {
     $response = api()->post("/api/v1/projects/{$projectId}/tables", [
         'headers' => ['Authorization' => "Bearer {$token}"],
@@ -59,7 +73,7 @@ function createTable(string $token, int $projectId, ?string $name = null, array 
 }
 
 /** @param string[] $permissions @return array{id: int, key: string} */
-function createApiKey(string $token, int $projectId, array $permissions, ?string $name = null): array
+function createApiKey(string $token, string $projectId, array $permissions, ?string $name = null): array
 {
     $response = api()->post("/api/v1/projects/{$projectId}/keys", [
         'headers' => ['Authorization' => "Bearer {$token}"],
@@ -72,7 +86,7 @@ function createApiKey(string $token, int $projectId, array $permissions, ?string
 }
 
 /** @param array{name?: string, role?: ?string, operation: string, conditions?: array, enabled?: bool} $payload */
-function createRlsPolicy(string $token, int $projectId, int $tableId, array $payload): array
+function createRlsPolicy(string $token, string $projectId, int $tableId, array $payload): array
 {
     $payload['name'] ??= uniqueSlug('policy');
 
@@ -87,7 +101,7 @@ function createRlsPolicy(string $token, int $projectId, int $tableId, array $pay
 }
 
 /** @return array{token: string, user: array{id: int, email: string, role: ?string}} */
-function registerEndUser(int $projectId, ?string $email = null, string $password = 'password123'): array
+function registerEndUser(string $projectId, ?string $email = null, string $password = 'password123'): array
 {
     $response = api()->post("/api/v1/{$projectId}/auth/register", [
         'json' => ['email' => $email ?? uniqueEmail('enduser'), 'password' => $password],
@@ -98,7 +112,7 @@ function registerEndUser(int $projectId, ?string $email = null, string $password
     return json($response);
 }
 
-function setEndUserRole(string $platformToken, int $projectId, int $endUserId, ?string $role): array
+function setEndUserRole(string $platformToken, string $projectId, int $endUserId, ?string $role): array
 {
     $response = api()->patch("/api/v1/projects/{$projectId}/end-users/{$endUserId}", [
         'headers' => ['Authorization' => "Bearer {$platformToken}"],

@@ -14,7 +14,7 @@ test('runs sql using logical table names and rewrites them to the project table 
         'json'    => ['sql' => "insert into posts (title) values ('Hello')"],
     ]);
     expect($insert->getStatusCode())->toBe(200);
-    expect(json($insert)['sql'])->toContain(Tables::physicalName($project['id'], 'posts'));
+    expect(json($insert)['sql'])->toContain(Tables::physicalName(projectInternalId($project['id']), 'posts'));
 
     $select = api()->post("/api/v1/projects/{$project['id']}/sql", [
         'headers' => ['Authorization' => "Bearer {$owner['token']}"],
@@ -25,7 +25,7 @@ test('runs sql using logical table names and rewrites them to the project table 
     $body = json($select);
     expect($body['columns'])->toBe(['id', 'title']);
     expect($body['rows'][0]['title'])->toBe('Hello');
-    expect($body['sql'])->toBe('select id, title from `' . Tables::physicalName($project['id'], 'posts') . '`');
+    expect($body['sql'])->toBe('select id, title from `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '`');
 });
 
 test('rejects sql that references another project physical table', function () {
@@ -37,7 +37,7 @@ test('rejects sql that references another project physical table', function () {
 
     $response = api()->post("/api/v1/projects/{$projectA['id']}/sql", [
         'headers' => ['Authorization' => "Bearer {$owner['token']}"],
-        'json'    => ['sql' => 'select id from ' . Tables::physicalName($projectB['id'], 'posts')],
+        'json'    => ['sql' => 'select id from ' . Tables::physicalName(projectInternalId($projectB['id']), 'posts')],
     ]);
 
     expect($response->getStatusCode())->toBe(422);
@@ -109,7 +109,7 @@ test('rewrites backtick quoted logical table names', function () {
     ]);
 
     expect($response->getStatusCode())->toBe(200);
-    expect(json($response)['sql'])->toBe('select id from `' . Tables::physicalName($project['id'], 'posts') . '`');
+    expect(json($response)['sql'])->toBe('select id from `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '`');
 });
 
 test('rejects sql comments in the editor', function () {

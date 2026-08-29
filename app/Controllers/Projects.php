@@ -13,7 +13,7 @@ class Projects
     {
         $pdo  = Database::getConn('default');
         $stmt = $pdo->prepare(
-            'SELECT id, name, slug, description, created_at FROM projects
+            'SELECT public_id AS id, name, slug, description, created_at FROM projects
              WHERE user_id = ? ORDER BY created_at DESC'
         );
         $stmt->execute([$params->user['id']]);
@@ -32,18 +32,17 @@ class Projects
             return $res->setStatusCode(422)->withJson(['error' => 'name is required']);
         }
 
-        $pdo    = Database::getConn('default');
-        $userId = $params->user['id'];
-        $slug   = self::uniqueSlug($pdo, $userId, self::slugify($name));
+        $pdo      = Database::getConn('default');
+        $userId   = $params->user['id'];
+        $slug     = self::uniqueSlug($pdo, $userId, self::slugify($name));
+        $publicId = self::generatePublicId($pdo);
 
         $pdo->prepare(
-            'INSERT INTO projects (user_id, name, slug, description) VALUES (?, ?, ?, ?)'
-        )->execute([$userId, $name, $slug, $description]);
-
-        $id = (int) $pdo->lastInsertId();
+            'INSERT INTO projects (public_id, user_id, name, slug, description) VALUES (?, ?, ?, ?, ?)'
+        )->execute([$publicId, $userId, $name, $slug, $description]);
 
         return $res->setStatusCode(201)->withJson([
-            'id'          => $id,
+            'id'          => $publicId,
             'name'        => $name,
             'slug'        => $slug,
             'description' => $description,
@@ -62,7 +61,7 @@ class Projects
         $stmt = $pdo->prepare(
             'SELECT id, name, created_at FROM project_tables WHERE project_id = ? ORDER BY name'
         );
-        $stmt->execute([$project['id']]);
+        $stmt->execute([$project['internal_id']]);
         $tables = $stmt->fetchAll();
 
         $hasReferences = self::projectColumnsHaveReferences($pdo);
@@ -94,6 +93,7 @@ class Projects
         }
         unset($table);
 
+        unset($project['internal_id']);
         $project['tables'] = $tables;
 
         return $res->withJson($project);
@@ -131,13 +131,13 @@ class Projects
             return $res->setStatusCode(422)->withJson(['error' => 'Nothing to update']);
         }
 
-        $values[] = $project['id'];
+        $values[] = $project['internal_id'];
         $pdo->prepare('UPDATE projects SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
 
         $stmt = $pdo->prepare(
-            'SELECT id, name, slug, description, created_at FROM projects WHERE id = ? LIMIT 1'
+            'SELECT public_id AS id, name, slug, description, created_at FROM projects WHERE id = ? LIMIT 1'
         );
-        $stmt->execute([$project['id']]);
+        $stmt->execute([$project['internal_id']]);
 
         return $res->withJson($stmt->fetch());
     }
@@ -151,19 +151,50 @@ class Projects
             return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
         }
 
-        $pdo->prepare('DELETE FROM projects WHERE id = ?')->execute([$project['id']]);
+        $pdo->prepare('DELETE FROM projects WHERE id = ?')->execute([$project['internal_id']]);
 
         return $res->setStatusCode(204);
     }
 
-    private static function findOwned(\PDO $pdo, mixed $id, int $userId): array|false
+    /**
+     * Looks up a project by its public id, scoped to the owning user. Returns
+     * the row shaped for API responses (id = public_id) plus 'internal_id',
+     * the numeric primary key other tables actually foreign-key against.
+     */
+    private static function findOwned(\PDO $pdo, mixed $publicId, int $userId): array|false
     {
         $stmt = $pdo->prepare(
-            'SELECT id, name, slug, description, created_at FROM projects
-             WHERE id = ? AND user_id = ? LIMIT 1'
+            'SELECT id AS internal_id, public_id AS id, name, slug, description, created_at FROM projects
+             WHERE public_id = ? AND user_id = ? LIMIT 1'
         );
-        $stmt->execute([$id, $userId]);
+        $stmt->execute([$publicId, $userId]);
         return $stmt->fetch();
+    }
+
+    /**
+     * Resolves a project's internal numeric id from its public id, without an
+     * ownership check. Used by unauthenticated, project-scoped public routes
+     * (edge function invocation, REST passthrough, end-user auth) so those
+     * URLs never expose or accept the sequential internal id.
+     */
+    public static function resolveInternalId(\PDO $pdo, mixed $publicId): ?int
+    {
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? LIMIT 1');
+        $stmt->execute([$publicId]);
+        $id = $stmt->fetchColumn();
+
+        return $id !== false ? (int) $id : null;
+    }
+
+    private static function generatePublicId(\PDO $pdo): string
+    {
+        do {
+            $publicId = 'prj_' . bin2hex(random_bytes(12));
+            $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? LIMIT 1');
+            $stmt->execute([$publicId]);
+        } while ($stmt->fetch());
+
+        return $publicId;
     }
 
     private static function projectColumnsHaveReferences(\PDO $pdo): bool

@@ -36,7 +36,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/show'), [
             'activeNav' => 'overview',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -44,7 +44,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/tables'), [
             'activeNav' => 'tables',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -52,7 +52,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/sql'), [
             'activeNav' => 'sql',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -60,7 +60,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/keys'), [
             'activeNav' => 'keys',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -68,7 +68,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/functions'), [
             'activeNav' => 'functions',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -76,7 +76,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/cron-jobs'), [
             'activeNav' => 'cron-jobs',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 
@@ -84,7 +84,7 @@ class Dashboard
     {
         return $res->withTemplate(t('dashboard/projects/end-users'), [
             'activeNav' => 'end-users',
-            'projectId' => (int) $params->project_id,
+            'projectId' => $params->project_id,
         ]);
     }
 }

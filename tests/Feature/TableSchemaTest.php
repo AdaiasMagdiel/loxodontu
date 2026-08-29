@@ -25,7 +25,7 @@ test('500s when the physical rename collides with an existing table', function (
     $table = createTable($owner['token'], $project['id'], 'posts', []);
     $collidingName = uniqueSlug('taken');
 
-    Database::getConn('default')->exec('CREATE TABLE `' . Tables::physicalName($project['id'], $collidingName) . '` (id INT)');
+    Database::getConn('default')->exec('CREATE TABLE `' . Tables::physicalName(projectInternalId($project['id']), $collidingName) . '` (id INT)');
 
     $response = api()->patch("/api/v1/projects/{$project['id']}/tables/{$table['id']}", [
         'headers' => ['Authorization' => "Bearer {$owner['token']}"],
@@ -211,7 +211,7 @@ test('500s when the physical ADD COLUMN collides with a column that exists outsi
     [$token, $project, $table] = postsTableForRls();
 
     Database::getConn('default')->exec(
-        'ALTER TABLE `' . Tables::physicalName($project['id'], 'posts') . '` ADD COLUMN `ghost` TEXT'
+        'ALTER TABLE `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '` ADD COLUMN `ghost` TEXT'
     );
 
     $response = api()->post("/api/v1/projects/{$project['id']}/tables/{$table['id']}/columns", [
@@ -360,7 +360,7 @@ test('500s when the physical CHANGE COLUMN collides with a column outside the tr
     $columnId = json(api()->get("/api/v1/projects/{$project['id']}/tables", ['headers' => ['Authorization' => "Bearer {$token}"]]))[0]['columns'][1]['id']; // created_by
 
     Database::getConn('default')->exec(
-        'ALTER TABLE `' . Tables::physicalName($project['id'], 'posts') . '` ADD COLUMN `ghost` TEXT'
+        'ALTER TABLE `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '` ADD COLUMN `ghost` TEXT'
     );
 
     $response = api()->patch("/api/v1/projects/{$project['id']}/tables/{$table['id']}/columns/{$columnId}", [
@@ -438,7 +438,7 @@ test('500s when the physical column was already removed outside the tracked meta
     $columnId = json(api()->get("/api/v1/projects/{$project['id']}/tables", ['headers' => ['Authorization' => "Bearer {$token}"]]))[0]['columns'][1]['id']; // created_by
 
     Database::getConn('default')->exec(
-        'ALTER TABLE `' . Tables::physicalName($project['id'], 'posts') . '` DROP COLUMN `created_by`'
+        'ALTER TABLE `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '` DROP COLUMN `created_by`'
     );
 
     $response = api()->delete("/api/v1/projects/{$project['id']}/tables/{$table['id']}/columns/{$columnId}?confirm=true", [

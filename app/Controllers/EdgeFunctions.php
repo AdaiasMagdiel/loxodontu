@@ -182,7 +182,12 @@ class EdgeFunctions
     public static function invoke(Request $req, Response $res, stdClass $params): Response
     {
         $pdo = Database::getConn('default');
-        $function = self::findBySlug($pdo, $params->project_id, $params->slug);
+        $projectId = Projects::resolveInternalId($pdo, $params->project_id);
+        if ($projectId === null) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Function not found']);
+        }
+
+        $function = self::findBySlug($pdo, $projectId, $params->slug);
         if (!$function || !(bool) $function['enabled']) {
             return $res->setStatusCode(404)->withJson(['error' => 'Function not found']);
         }
@@ -190,10 +195,10 @@ class EdgeFunctions
         $auth = null;
         if ((bool) $function['require_api_key']) {
             $token = self::extractToken($req);
-            if ($token === null || !self::tokenCanInvoke($pdo, (int) $params->project_id, $token)) {
+            if ($token === null || !self::tokenCanInvoke($pdo, $projectId, $token)) {
                 return $res->setStatusCode(401)->withJson(['error' => 'Unauthorized']);
             }
-            $auth = self::resolveAuth($pdo, $req, $params->project_id);
+            $auth = self::resolveAuth($pdo, $req, $projectId);
         }
 
         try {
@@ -208,7 +213,7 @@ class EdgeFunctions
         ];
 
         $result = (new EdgeFunctionRunner($pdo))->invoke(
-            (int) $params->project_id,
+            $projectId,
             (string) $params->slug,
             $req->getMethod(),
             $headers,
@@ -272,10 +277,10 @@ class EdgeFunctions
         return null;
     }
 
-    private static function findOwnedProject(PDO $pdo, mixed $id, int $userId): array|false
+    private static function findOwnedProject(PDO $pdo, mixed $publicId, int $userId): array|false
     {
-        $stmt = $pdo->prepare('SELECT id FROM projects WHERE id = ? AND user_id = ? LIMIT 1');
-        $stmt->execute([$id, $userId]);
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$publicId, $userId]);
 
         return $stmt->fetch();
     }

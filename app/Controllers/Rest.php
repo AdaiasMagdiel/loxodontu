@@ -37,7 +37,10 @@ class Rest
         }
 
         $pdo       = Database::getConn('default');
-        $projectId = $params->project_id;
+        $projectId = Projects::resolveInternalId($pdo, $params->project_id);
+        if ($projectId === null) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Resource not found']);
+        }
         $prefix    = substr($token, 0, 8);
 
         $stmt = $pdo->prepare(
