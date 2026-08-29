@@ -67,6 +67,7 @@ nav:
       - API Keys & RLS: api/keys-and-rls.md
       - End Users: api/end-users.md
       - REST Passthrough: api/rest-passthrough.md
+      - Storage: api/storage.md
       - Errors & Responses: api/errors.md
   - Edge Functions: edge-functions.md
   - Cron Jobs: cron-jobs.md

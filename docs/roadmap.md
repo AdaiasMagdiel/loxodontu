@@ -13,12 +13,13 @@ deadline, just an honest picture of what comes next.
 - **Edge functions** — project-scoped PHP functions exposed over HTTP and callable from cron jobs.
 - **Cron jobs** — per-project scheduled jobs with retry, queues, recurring execution, and a single `worker.php` entry point for shared hosting cron integrations.
 - **Dashboard UI** — web interface to manage projects, tables, columns, RLS policies, API keys, and end users without touching the API directly. PHP-routed pages, each backed by a scoped Vue 3 component.
+- **Storage** — file upload and retrieval per project, organized into buckets. Object metadata lives in the database; access control reuses the same RLS engine as tables (storage policies), scoped per bucket. Local filesystem only for now.
 
 ## Next
 
 ## Later
 
-- **Storage** — file upload and retrieval per project. Likely local filesystem first, with a path toward S3-compatible backends.
+- **Storage: S3-compatible backend** — an alternative to local filesystem storage for buckets.
 - **Schema history** — track column/table changes over time (who changed what, when), on top of the alteration endpoints that already exist.
 
 ## Someday (if it makes sense)

@@ -48,3 +48,11 @@ See [Cron Jobs](cron-jobs.md) for how the worker is invoked and how job types wo
 | `EDGE_PHP_BINARY` | Overrides the CLI PHP binary used to spawn the sandboxed subprocess that runs edge function code. Set this on shared hosts where `PHP_BINARY` resolves to `lsphp` or `php-cgi`, which can't run as a plain CLI interpreter. |
 
 See [Edge Functions](edge-functions.md) for the sandbox model this feeds into.
+
+## Storage
+
+| Variable | Default | Description |
+| -------- | ------- | ------------ |
+| `STORAGE_PATH` | `storage/files` (project root) | Absolute path where uploaded files are written to disk, one subdirectory per project and bucket. |
+
+See [Storage](api/storage.md) for buckets, policies, and the upload/download API.

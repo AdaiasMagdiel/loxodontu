@@ -7,6 +7,9 @@
 vendor/
 composer.phar
 
+# Storage
+/storage/files/
+
 # Tests
 .phpunit.cache/
 .pest.cache/

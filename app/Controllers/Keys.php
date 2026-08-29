@@ -10,7 +10,10 @@ use stdClass;
 
 class Keys
 {
-    private const VALID_PERMISSIONS = ['select', 'insert', 'update', 'delete', 'function'];
+    private const VALID_PERMISSIONS = [
+        'select', 'insert', 'update', 'delete', 'function',
+        'storage:select', 'storage:insert', 'storage:update', 'storage:delete',
+    ];
 
     public static function index(Request $req, Response $res, stdClass $params): Response
     {

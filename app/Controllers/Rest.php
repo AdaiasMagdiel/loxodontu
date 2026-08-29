@@ -9,7 +9,9 @@ use AdaiasMagdiel\PdoRestify\Http\Request as RestRequest;
 use AdaiasMagdiel\PdoRestify\Operation;
 use AdaiasMagdiel\PdoRestify\QueryBuilder;
 use AdaiasMagdiel\PdoRestify\Resource;
+use App\Auth\EndUserAuth;
 use App\Database;
+use App\Rls\PolicyEngine;
 use stdClass;
 
 class Rest
@@ -85,7 +87,7 @@ class Rest
             array_unshift($columns, 'id');
         }
 
-        $auth = self::resolveAuth($pdo, $req, $projectId);
+        $auth = EndUserAuth::resolve($pdo, $req, $projectId);
 
         $stmt = $pdo->prepare(
             'SELECT role, operation, expression FROM project_rls_policies
@@ -94,56 +96,7 @@ class Rest
         $stmt->execute([$projectTable['id']]);
         $rlsPolicies = $stmt->fetchAll();
 
-        // Bucket every policy under each operation it applies to ('all' fans out to all four).
-        $byOperation = ['select' => [], 'insert' => [], 'update' => [], 'delete' => []];
-        foreach ($rlsPolicies as $policy) {
-            $op  = strtolower($policy['operation']);
-            $ops = $op === 'all' ? array_keys($byOperation) : [$op];
-
-            foreach ($ops as $o) {
-                if (isset($byOperation[$o])) {
-                    $byOperation[$o][] = $policy;
-                }
-            }
-        }
-
-        // No policies at all for an operation => open (pre-RLS behavior).
-        // Policies exist but none match the caller's role => deny entirely.
-        // Otherwise, merge the conditions of every applicable policy; any
-        // applicable policy with no conditions makes the whole operation open.
-        $policyConditions = [];
-        foreach ($byOperation as $op => $policies) {
-            if ($policies === []) {
-                $policyConditions[$op] = [];
-                continue;
-            }
-
-            $applicable = array_filter(
-                $policies,
-                fn(array $p): bool => $p['role'] === null || ($auth !== null && $p['role'] === $auth['role']),
-            );
-
-            if ($applicable === []) {
-                $policyConditions[$op] = null; // sentinel: deny
-                continue;
-            }
-
-            $merged = [];
-            foreach ($applicable as $p) {
-                $conditions = json_decode($p['expression'], true) ?? [];
-
-                if ($conditions === []) {
-                    $merged = [];
-                    break; // an unconditional applicable policy makes this operation fully open
-                }
-
-                foreach ($conditions as $column => $value) {
-                    $merged[$column] = self::resolvePlaceholder($value, $auth);
-                }
-            }
-
-            $policyConditions[$op] = $merged;
-        }
+        $policyConditions = PolicyEngine::resolve($rlsPolicies, $auth);
 
         $physicalTable = Tables::physicalName((int) $projectId, $table);
         $resource      = (new Resource($physicalTable))->columns($columns);
@@ -225,53 +178,4 @@ class Rest
         return substr($header, 7);
     }
 
-    /**
-     * Resolves the end user authenticated via the `X-User-Token` header (separate
-     * from the project API key in Authorization, which only gates the request at
-     * the project level). Returns null for anonymous requests — RLS conditions
-     * referencing $auth.* then resolve to NULL, which never matches a row.
-     *
-     * @return array{id: int, email: string, role: ?string}|null
-     */
-    private static function resolveAuth(\PDO $pdo, ErlRequest $req, mixed $projectId): ?array
-    {
-        $token = $req->getHeader('X-User-Token') ?? '';
-
-        if ($token === '') {
-            return null;
-        }
-
-        $stmt = $pdo->prepare(
-            'SELECT u.id, u.email, u.role
-             FROM project_end_user_tokens t
-             JOIN project_end_users u ON u.id = t.end_user_id
-             WHERE t.token_hash = ? AND t.expires_at > NOW() AND u.project_id = ?
-             LIMIT 1'
-        );
-        $stmt->execute([hash('sha256', $token), $projectId]);
-        $user = $stmt->fetch();
-
-        if (!$user) {
-            return null;
-        }
-
-        return ['id' => (int) $user['id'], 'email' => $user['email'], 'role' => $user['role']];
-    }
-
-    /** @param array{id: int, email: string, role: ?string}|null $auth */
-    private static function resolvePlaceholder(mixed $value, ?array $auth): mixed
-    {
-        if (is_array($value) && isset($value['op'])) {
-            if (isset($value['value'])) {
-                $value['value'] = self::resolvePlaceholder($value['value'], $auth);
-            }
-            return $value;
-        }
-
-        if (!is_string($value) || !str_starts_with($value, '$auth.')) {
-            return $value;
-        }
-
-        return $auth[substr($value, 6)] ?? null;
-    }
 }

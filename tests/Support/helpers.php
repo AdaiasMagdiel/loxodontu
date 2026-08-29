@@ -142,6 +142,66 @@ function postsTableForRls(): array
     return [$owner['token'], $project, $table];
 }
 
+/** @return array{id: int, name: string, public: bool} */
+function createBucket(string $token, string $projectId, ?string $name = null, bool $public = false): array
+{
+    $response = api()->post("/api/v1/projects/{$projectId}/storage/buckets", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => ['name' => $name ?? uniqueSlug('bucket'), 'public' => $public],
+    ]);
+
+    expect($response->getStatusCode())->toBe(201);
+
+    return json($response);
+}
+
+/** @param array{name?: string, role?: ?string, operation: string, conditions?: array, enabled?: bool} $payload */
+function createStoragePolicy(string $token, string $projectId, int $bucketId, array $payload): array
+{
+    $payload['name'] ??= uniqueSlug('storage-policy');
+
+    $response = api()->post("/api/v1/projects/{$projectId}/storage/buckets/{$bucketId}/policies", [
+        'headers' => ['Authorization' => "Bearer {$token}"],
+        'json'    => $payload,
+    ]);
+
+    expect($response->getStatusCode())->toBe(201);
+
+    return json($response);
+}
+
+/**
+ * Uploads $contents as a file to a bucket via the storage passthrough.
+ *
+ * @param array<string, mixed> $extraHeaders e.g. ['X-User-Token' => ...]
+ */
+function uploadObject(
+    string $apiKey,
+    string $projectId,
+    string $bucket,
+    string $path,
+    string $contents = 'hello',
+    string $mimeType = 'text/plain',
+    array $extraHeaders = [],
+): \AdaiasMagdiel\Erlenmeyer\Response {
+    $tmpFile = tempnam(sys_get_temp_dir(), 'loxodontu-upload-');
+    file_put_contents($tmpFile, $contents);
+
+    return api()->post("/api/v1/{$projectId}/storage/{$bucket}", [
+        'headers'     => array_merge(['Authorization' => "Bearer {$apiKey}"], $extraHeaders),
+        'form_params' => ['path' => $path],
+        'files'       => [
+            'file' => [
+                'name'     => basename($path),
+                'type'     => $mimeType,
+                'tmp_name' => $tmpFile,
+                'error'    => 0,
+                'size'     => strlen($contents),
+            ],
+        ],
+    ]);
+}
+
 /** Convenience: owner + project + table + full-permission API key in one call. */
 function bootstrapProjectWithTable(array $columns, ?string $tableName = null): array
 {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Database;
+use App\Storage\LocalDisk;
 use Dotenv\Dotenv;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -20,6 +21,8 @@ Database::configure('default', 'mysql', [
     'password' => env("DB_PASSWORD_$suffix"),
     'database' => env("DB_DATABASE_$suffix"),
 ]);
+
+LocalDisk::configure(env('STORAGE_PATH', ROOT_DIR . '/storage/files'));
 
 if (isDev()) {
     ini_set('display_errors', '1');
