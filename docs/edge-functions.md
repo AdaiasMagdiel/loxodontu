@@ -62,6 +62,8 @@ curl -X POST "$APP_URL/api/v1/projects/1/functions" \
 ## Example function source
 
 ```php
+<?php
+
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
 use App\Edge\Http;

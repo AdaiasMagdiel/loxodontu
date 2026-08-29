@@ -82,6 +82,8 @@ curl -X POST "$APP_URL/api/v1/projects/1/cron-jobs" \
 The callback must be autoloadable and callable. It receives the decoded payload and the job row:
 
 ```php
+<?php
+
 namespace App\Jobs;
 
 use App\Cron\JobResult;
@@ -98,6 +100,8 @@ class DailyCleanup
 Internal code can schedule jobs without going through HTTP:
 
 ```php
+<?php
+
 use App\Cron\CronJob;
 
 CronJob::schedule(
