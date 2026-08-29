@@ -74,6 +74,44 @@ test('invokes an edge function with the owning platform token', function () {
     expect(json($response))->toMatchArray(['ok' => true, 'message' => 'from ui']);
 });
 
+test('captures function output without corrupting the sandbox response', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+
+    $source = <<<'PHP'
+<?php
+
+use App\Edge\FunctionRequest;
+use App\Edge\FunctionResponse;
+
+return function (FunctionRequest $request): FunctionResponse {
+    echo "debug output that should not leak";
+
+    return FunctionResponse::json([
+        'ok' => true,
+        'method' => $request->method,
+    ]);
+};
+PHP;
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Noisy',
+            'slug' => 'noisy',
+            'source_code' => $source,
+            'methods' => ['GET'],
+        ],
+    ]);
+
+    $response = api()->get("/api/v1/{$project['id']}/functions/noisy", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+    ]);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect(json($response))->toMatchArray(['ok' => true, 'method' => 'GET']);
+});
+
 test('invokes an edge function with a project api key that has function permission', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);

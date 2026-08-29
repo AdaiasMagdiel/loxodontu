@@ -34,13 +34,14 @@ ob_start();
 
 try {
     $entrypoint = require $codePath;
-    $printed = ob_get_clean();
 
     if (is_callable($entrypoint)) {
         $result = $entrypoint($request);
     } else {
         $result = $entrypoint;
     }
+
+    $printed = ob_get_clean();
 
     if ($result instanceof FunctionResponse) {
         $payload = [
