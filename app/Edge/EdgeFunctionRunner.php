@@ -137,8 +137,9 @@ class EdgeFunctionRunner
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+        $phpBinary = $this->phpBinary();
         $process = proc_open([
-            PHP_BINARY,
+            $phpBinary,
             '-q',
             '-d',
             'open_basedir=' . __DIR__ . PATH_SEPARATOR . $sandboxDir,
@@ -207,7 +208,7 @@ class EdgeFunctionRunner
         $jsonError = null;
         $payload = $this->decodeSandboxPayload($stdout, $jsonError);
         if (!is_array($payload)) {
-            return $this->invalidSandboxResponse($stdout, $stderr, $exitCode, $jsonError);
+            return $this->invalidSandboxResponse($stdout, $stderr, $exitCode, $jsonError, $phpBinary);
         }
 
         $this->markInvoked((int) $function['id']);
@@ -243,13 +244,31 @@ class EdgeFunctionRunner
         return is_array($payload) ? $payload : null;
     }
 
-    private function invalidSandboxResponse(string $stdout, string $stderr, ?int $exitCode, ?string $jsonError): FunctionResponse
+    private function phpBinary(): string
+    {
+        $configured = trim((string) env('EDGE_PHP_BINARY', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $dir = dirname(PHP_BINARY);
+        foreach ([$dir . '/php', $dir . '/php-cli', '/usr/bin/php', '/usr/local/bin/php'] as $candidate) {
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return PHP_BINARY;
+    }
+
+    private function invalidSandboxResponse(string $stdout, string $stderr, ?int $exitCode, ?string $jsonError, string $phpBinary): FunctionResponse
     {
         $body = ['error' => 'Function returned an invalid response'];
 
         if (env('DEBUG') === 'true') {
             $body['debug'] = [
                 'php_binary' => PHP_BINARY,
+                'sandbox_php_binary' => $phpBinary,
                 'php_sapi' => PHP_SAPI,
                 'exit_code' => $exitCode,
                 'json_error' => $jsonError,

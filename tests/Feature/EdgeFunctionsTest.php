@@ -139,13 +139,14 @@ test('includes invalid sandbox output details when debug is enabled', function (
     $runner = new App\Edge\EdgeFunctionRunner(App\Database::getConn('default'));
     $method = new ReflectionMethod($runner, 'invalidSandboxResponse');
 
-    $response = $method->invoke($runner, 'not json', 'stderr text', 0, 'Syntax error');
+    $response = $method->invoke($runner, 'not json', 'stderr text', 0, 'Syntax error', '/usr/bin/php');
 
     expect($response->status)->toBe(500);
     expect($response->body['error'])->toBe('Function returned an invalid response');
     expect($response->body['debug'])->toMatchArray([
         'exit_code' => 0,
         'json_error' => 'Syntax error',
+        'sandbox_php_binary' => '/usr/bin/php',
         'stdout_length' => 8,
         'stderr_length' => 11,
         'stdout_preview' => 'not json',
@@ -154,6 +155,19 @@ test('includes invalid sandbox output details when debug is enabled', function (
 
     putenv('DEBUG=false');
     $_ENV['DEBUG'] = 'false';
+});
+
+test('uses configured php binary for sandbox processes', function () {
+    putenv('EDGE_PHP_BINARY=/custom/php-cli');
+    $_ENV['EDGE_PHP_BINARY'] = '/custom/php-cli';
+
+    $runner = new App\Edge\EdgeFunctionRunner(App\Database::getConn('default'));
+    $method = new ReflectionMethod($runner, 'phpBinary');
+
+    expect($method->invoke($runner))->toBe('/custom/php-cli');
+
+    putenv('EDGE_PHP_BINARY');
+    unset($_ENV['EDGE_PHP_BINARY']);
 });
 
 test('rejects invalid edge function payloads', function (array $payload, string $message) {
