@@ -112,6 +112,22 @@ PHP;
     expect(json($response))->toMatchArray(['ok' => true, 'method' => 'GET']);
 });
 
+test('decodes sandbox payloads with cgi headers before json', function () {
+    $runner = new App\Edge\EdgeFunctionRunner(App\Database::getConn('default'));
+    $method = new ReflectionMethod($runner, 'decodeSandboxPayload');
+
+    $payload = $method->invoke($runner, "Content-type: text/html; charset=UTF-8\r\n\r\n" . json_encode([
+        'status' => 200,
+        'headers' => ['Content-Type' => 'application/json'],
+        'body' => ['ok' => true],
+    ]));
+
+    expect($payload)->toMatchArray([
+        'status' => 200,
+        'body' => ['ok' => true],
+    ]);
+});
+
 test('rejects invalid edge function payloads', function (array $payload, string $message) {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);

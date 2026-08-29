@@ -18,10 +18,10 @@ places, and for many independent developers, shared PHP hosting remains the chea
 simplest, or only realistic way to put an application online.
 
 That constraint shapes the project. Features that are commonly built around newer
-runtimes may look different here. For example, future edge functions are planned as
-lightweight PHP scripts, even though similar systems often use Deno or other runtimes.
-That choice is deliberate: on shared hosting, extra languages, background services,
-containers, and process managers are often unavailable or impractical.
+runtimes may look different here. Edge functions, for example, are lightweight PHP
+scripts, even though similar systems often use Deno or other runtimes. That choice
+is deliberate: on shared hosting, extra languages, background services, containers,
+and process managers are often unavailable or impractical.
 
 The goal is not to ignore modern infrastructure, but to make useful backend technology
 available in environments that modern tooling often overlooks. Loxodontu is built for
@@ -53,7 +53,6 @@ This is where the project is heading — in rough priority order. Nothing here i
 ### Someday (if it makes sense)
 
 - **Realtime** — long-polling or SSE for table change events.
-- **Edge functions** — lightweight PHP scripts executed per-request within project scope.
 
 ## API Overview
 

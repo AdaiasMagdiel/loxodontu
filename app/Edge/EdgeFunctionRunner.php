@@ -139,6 +139,7 @@ class EdgeFunctionRunner
 
         $process = proc_open([
             PHP_BINARY,
+            '-q',
             '-d',
             'open_basedir=' . __DIR__ . PATH_SEPARATOR . $sandboxDir,
             '-d',
@@ -203,7 +204,7 @@ class EdgeFunctionRunner
             return FunctionResponse::json(['error' => trim($stderr) ?: 'Function execution failed'], 500);
         }
 
-        $payload = json_decode($stdout, true);
+        $payload = $this->decodeSandboxPayload($stdout);
         if (!is_array($payload)) {
             return FunctionResponse::json(['error' => 'Function returned an invalid response'], 500);
         }
@@ -215,6 +216,25 @@ class EdgeFunctionRunner
             (int) ($payload['status'] ?? 200),
             is_array($payload['headers'] ?? null) ? $payload['headers'] : [],
         );
+    }
+
+    /** @return array<string, mixed>|null */
+    private function decodeSandboxPayload(string $stdout): ?array
+    {
+        $payload = json_decode($stdout, true);
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        $start = strpos($stdout, '{');
+        $end = strrpos($stdout, '}');
+        if ($start === false || $end === false || $end < $start) {
+            return null;
+        }
+
+        $payload = json_decode(substr($stdout, $start, $end - $start + 1), true);
+
+        return is_array($payload) ? $payload : null;
     }
 
     private function sandboxDir(int $projectId, string $slug): string
