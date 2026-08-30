@@ -1,7 +1,7 @@
 # Dashboard
 
-Loxodontu ships a web dashboard for managing projects, tables, RLS policies, API keys, edge
-functions, cron jobs, and end users without touching the API directly.
+Loxodontu ships a web dashboard for managing projects, tables, RLS policies, API keys, storage
+buckets and files, edge functions, cron jobs, and end users without touching the API directly.
 
 ## Architecture
 
@@ -25,6 +25,7 @@ can do, your own application can also do directly over HTTP.
 | `/dashboard/projects/{project_id}/tables` | Manage tables and columns |
 | `/dashboard/projects/{project_id}/sql` | Run raw SQL against the project's tables — see [Running raw SQL](api/tables.md#running-raw-sql) |
 | `/dashboard/projects/{project_id}/keys` | Manage project API keys |
+| `/dashboard/projects/{project_id}/storage` | Manage storage buckets, browse/upload/download/delete files, and manage storage policies |
 | `/dashboard/projects/{project_id}/functions` | Manage edge functions |
 | `/dashboard/projects/{project_id}/cron-jobs` | Manage cron jobs |
 | `/dashboard/projects/{project_id}/end-users` | Manage a project's end users and roles |

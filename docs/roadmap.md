@@ -12,8 +12,8 @@ deadline, just an honest picture of what comes next.
 - **Schema alterations** — tables and columns can be changed after creation: rename a table, add a column, rename a column, change a column's type/nullability/default. Column removal is destructive and requires `?confirm=true`.
 - **Edge functions** — project-scoped PHP functions exposed over HTTP and callable from cron jobs.
 - **Cron jobs** — per-project scheduled jobs with retry, queues, recurring execution, and a single `worker.php` entry point for shared hosting cron integrations.
-- **Dashboard UI** — web interface to manage projects, tables, columns, RLS policies, API keys, and end users without touching the API directly. PHP-routed pages, each backed by a scoped Vue 3 component.
-- **Storage** — file upload and retrieval per project, organized into buckets. Object metadata lives in the database; access control reuses the same RLS engine as tables (storage policies), scoped per bucket. Local filesystem only for now.
+- **Dashboard UI** — web interface to manage projects, tables, columns, RLS policies, API keys, storage buckets/files, and end users without touching the API directly. PHP-routed pages, each backed by a scoped Vue 3 component.
+- **Storage** — file upload and retrieval per project, organized into buckets. Object metadata lives in the database; access control reuses the same RLS engine as tables (storage policies), scoped per bucket. Manageable via the API and the dashboard's Storage screen (buckets, file browser with upload/download/delete). Local filesystem only for now.
 
 ## Next
 

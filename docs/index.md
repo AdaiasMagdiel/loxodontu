@@ -12,7 +12,8 @@ the box — leveraging the speed, simplicity, and ecosystem of PHP 8+.
 
 - **Management API** — auth, projects, tables, API keys, and RLS policies.
 - **REST passthrough** — an instant, token-authenticated REST API in front of your tables.
-- **Row-Level Security (RLS)** — per-role, per-operation conditions enforced at the REST layer.
+- **Row-Level Security (RLS)** — policies are raw SQL boolean expressions (real `WHERE`/`WITH CHECK` power, not a fixed condition DSL), enforced transparently at the REST layer.
+- **Storage** — per-project file buckets with the same RLS-style policies, upload/download/delete via the API or the dashboard's file browser.
 - **Project-level auth** — a project's own end users, separate from platform accounts.
 - **Edge functions** — project-scoped PHP functions exposed over HTTP, sandboxed for shared hosting.
 - **Cron jobs** — scheduled, retryable jobs driven by a single `worker.php` entry point.

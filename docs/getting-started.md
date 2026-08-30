@@ -125,5 +125,5 @@ curl http://localhost:8000/api/v1/1/rest/todos \
 ```
 
 From here: browse the full [API Overview](api/overview.md), lock down access with
-[RLS policies](api/keys-and-rls.md), or read [Deployment](deployment.md) to put this on shared
-hosting.
+[RLS policies](api/keys-and-rls.md), upload files with [Storage](api/storage.md), or read
+[Deployment](deployment.md) to put this on shared hosting.

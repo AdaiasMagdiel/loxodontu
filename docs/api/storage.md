@@ -34,6 +34,22 @@ On `INSERT`/`UPDATE` this is also the `WITH CHECK`: an upload whose (Storage-ass
 disk — e.g. an anonymous upload (`owner_id` is `NULL`) against the policy above, since SQL
 never treats `NULL = NULL` as true.
 
+### Objects (platform owner)
+
+| Method | Route                                                                       | Description        |
+| ------ | ------------------------------------------------------------------------------ | --------------------|
+| GET    | `/projects/{id}/storage/buckets/{bucket_id}/objects`                          | List a bucket's objects |
+| POST   | `/projects/{id}/storage/buckets/{bucket_id}/objects`                          | Upload (`multipart/form-data`, field `file`, optional field `path`) |
+| GET    | `/projects/{id}/storage/buckets/{bucket_id}/objects/{object_id}/download`    | Download            |
+| DELETE | `/projects/{id}/storage/buckets/{bucket_id}/objects/{object_id}`             | Delete              |
+
+These are what the [dashboard](../dashboard.md)'s Storage screen calls to browse/upload/download/
+delete files. They're authenticated with the platform owner's own login (`Authorization: Bearer
+<platform token>`, same as every other `/projects/{id}/...` management route) and **bypass bucket
+policies entirely** — the owner can always see and manage every object in their own bucket, the
+same way the [SQL Editor](tables.md#running-raw-sql) bypasses table RLS. Uploads through here set
+`owner_id` to `NULL` (there's no end-user identity in a platform-owner request).
+
 ## Object passthrough
 
 | Method | Route                                              | Auth                          | Description                    |

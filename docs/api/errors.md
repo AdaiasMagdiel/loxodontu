@@ -45,7 +45,7 @@ Non-exhaustive, but covers what you'll hit most:
 - `name must be a non-empty string` / similar per-field required-field messages
 - `Email already registered` *(409, not 422 — included here since it's the most common signup error)*
 - `password must be at least 8 characters`
-- `permissions must be a subset of: select, insert, update, delete, function`
+- `permissions must contain only: select, insert, update, delete, function, storage:select, storage:insert, storage:update, storage:delete`
 - `expires_at must be a future datetime`
 - `slug must contain only letters, numbers, dashes, and underscores`
 - `Function slug already exists in this project` *(409)*
@@ -55,13 +55,17 @@ Non-exhaustive, but covers what you'll hit most:
 - `memory_limit_mb must be between 16 and 256`
 - `handler must use ClassName::method syntax`
 - `role must be null or an alphanumeric string (max 64 chars)`
+- `expression is required` / `expression is too long (max 10000 characters)` — RLS/storage policies
+- `expression must be a single boolean expression: ";", "--" and "/*" are not allowed`
+- `unknown placeholder $auth.foo; use one of: $auth.id, $auth.email, $auth.role`
 - `Nothing to update` — returned by `PATCH` endpoints when the request body has no recognized
   fields to change
 
 ## Pagination headers
 
-Every paginated list endpoint (tables, keys, RLS policies, end users, cron jobs, functions, and
-REST passthrough's own list endpoint) echoes the resolved pagination back as response headers:
+Every paginated list endpoint (tables, keys, RLS policies, end users, cron jobs, functions,
+storage buckets/objects/policies, and REST/Storage passthrough's own list endpoints) echoes the
+resolved pagination back as response headers:
 
 | Header | Meaning |
 | ------ | -------- |
