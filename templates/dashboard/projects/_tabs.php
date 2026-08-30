@@ -6,6 +6,7 @@ $tabs = [
     ['tables', '/tables', 'Tables'],
     ['sql', '/sql', 'SQL Editor'],
     ['keys', '/keys', 'API Keys'],
+    ['storage', '/storage', 'Storage'],
     ['functions', '/functions', 'Functions'],
     ['cron-jobs', '/cron-jobs', 'Cron Jobs'],
     ['end-users', '/end-users', 'End Users'],

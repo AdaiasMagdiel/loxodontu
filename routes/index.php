@@ -12,6 +12,7 @@ use App\Controllers\RlsPolicies;
 use App\Controllers\Site;
 use App\Controllers\Storage;
 use App\Controllers\StorageBuckets;
+use App\Controllers\StorageObjects;
 use App\Controllers\StoragePolicies;
 use App\Middleware\PlatformAuth;
 
@@ -31,6 +32,7 @@ $app->get('/dashboard/projects/[project_id]/keys', [Dashboard::class, 'projectKe
 $app->get('/dashboard/projects/[project_id]/functions', [Dashboard::class, 'projectFunctions']);
 $app->get('/dashboard/projects/[project_id]/cron-jobs', [Dashboard::class, 'projectCronJobs']);
 $app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
+$app->get('/dashboard/projects/[project_id]/storage', [Dashboard::class, 'projectStorage']);
 
 $app->group('/api', function () use ($app) {
     $app->get('/health', function ($req, $res) {
@@ -100,6 +102,13 @@ $app->group('/api', function () use ($app) {
         $app->get('/projects/[project_id]/storage/buckets/[bucket_id]/policies', [StoragePolicies::class, 'index'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects/[project_id]/storage/buckets/[bucket_id]/policies', [StoragePolicies::class, 'store'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/storage/buckets/[bucket_id]/policies/[policy_id]', [StoragePolicies::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+
+        // Storage objects — owner-facing (dashboard), bypasses bucket RLS entirely,
+        // the same way the SQL Editor bypasses table RLS.
+        $app->get('/projects/[project_id]/storage/buckets/[bucket_id]/objects', [StorageObjects::class, 'index'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/storage/buckets/[bucket_id]/objects', [StorageObjects::class, 'store'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/storage/buckets/[bucket_id]/objects/[object_id]/download', [StorageObjects::class, 'download'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/projects/[project_id]/storage/buckets/[bucket_id]/objects/[object_id]', [StorageObjects::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
 
         // End users (a project's own app users) — management, by the platform owner
         $app->get('/projects/[project_id]/end-users', [EndUsers::class, 'index'], [[PlatformAuth::class, 'handle']]);

@@ -110,10 +110,8 @@ ob_start();
                             <div v-for="pol in ui(table.id).policies" :key="pol.id" class="flex items-center justify-between px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
                                 <div class="text-xs font-mono" style="color:var(--text-main);">
                                     <span class="font-head font-medium uppercase">{{ pol.operation }}</span>
-                                    <span v-if="pol.role" style="color:var(--text-muted);"> · role: {{ pol.role }}</span>
                                     <span v-if="pol.name" style="color:var(--text-muted);"> · {{ pol.name }}</span>
-                                    <span v-if="Object.keys(pol.conditions).length" style="color:var(--text-muted);"> · {{ formatConditions(pol.conditions) }}</span>
-                                    <span v-else style="color:var(--text-muted);"> · unrestricted</span>
+                                    <span style="color:var(--text-muted);"> · {{ pol.expression }}</span>
                                 </div>
                                 <button class="btn-ghost-danger" @click="deletePolicy(table, pol)">Delete</button>
                             </div>
@@ -123,43 +121,14 @@ ob_start();
                                 <select v-model="ui(table.id).newPolicy.operation" class="input w-28">
                                     <option v-for="op in rlsOperations" :key="op" :value="op">{{ op }}</option>
                                 </select>
-                                <input v-model="ui(table.id).newPolicy.role" placeholder="role (optional)" class="input w-32" />
                             </div>
-                            <div v-for="(row, idx) in ui(table.id).newPolicy.conditions" :key="idx" class="flex items-center gap-2 flex-wrap mt-2">
-                                <select v-model="row.column" class="input w-28">
-                                    <option v-for="c in tableColumnNames(table)" :key="c" :value="c">{{ c }}</option>
-                                </select>
-                                <select v-model="row.op" class="input w-32">
-                                    <option value="eq">= (eq)</option>
-                                    <option value="ne">≠ (ne)</option>
-                                    <option value="gt">&gt; (gt)</option>
-                                    <option value="gte">≥ (gte)</option>
-                                    <option value="lt">&lt; (lt)</option>
-                                    <option value="lte">≤ (lte)</option>
-                                    <option value="is_null">IS NULL</option>
-                                    <option value="is_not_null">IS NOT NULL</option>
-                                </select>
-                                <template v-if="row.op !== 'is_null' && row.op !== 'is_not_null'">
-                                    <select v-model="row.valueType" class="input w-28">
-                                        <option value="placeholder">placeholder</option>
-                                        <option value="string">string</option>
-                                        <option value="number">number</option>
-                                        <option value="boolean">boolean</option>
-                                        <option value="null">null</option>
-                                    </select>
-                                    <select v-if="row.valueType === 'placeholder'" v-model="row.value" class="input w-36">
-                                        <option v-for="ph in authPlaceholders" :key="ph" :value="ph">{{ ph }}</option>
-                                    </select>
-                                    <select v-else-if="row.valueType === 'boolean'" v-model="row.value" class="input w-24">
-                                        <option value="true">true</option>
-                                        <option value="false">false</option>
-                                    </select>
-                                    <input v-else-if="row.valueType !== 'null'" v-model="row.value" class="input w-36" placeholder="value" />
-                                </template>
-                                <button class="btn-ghost-danger" @click="ui(table.id).newPolicy.conditions.splice(idx, 1)">&times;</button>
-                            </div>
+                            <textarea v-model="ui(table.id).newPolicy.expression" rows="2" class="input mt-2 font-mono" placeholder="created_by = $auth.id OR $auth.role = 'admin'"></textarea>
+                            <p class="text-xs mt-1" style="color:var(--text-muted);">
+                                Raw SQL boolean expression, evaluated against this table's columns. Placeholders:
+                                <code v-for="ph in authPlaceholders" :key="ph" class="font-mono mr-1" style="color:var(--accent);">{{ ph }}</code>
+                                — on INSERT/UPDATE this also acts as a WITH CHECK: a write whose values don't satisfy it is rejected (403), not silently corrected.
+                            </p>
                             <div class="flex items-center gap-2 mt-2">
-                                <button class="btn-ghost" @click="ui(table.id).newPolicy.conditions.push({ column: tableColumnNames(table)[0], op: 'eq', valueType: 'placeholder', value: '$auth.id' })">+ Condition</button>
                                 <button class="btn-accent" @click="addPolicy(table)">+ Add Policy</button>
                             </div>
                         </div>
@@ -261,14 +230,10 @@ ob_start();
                         newColumn: blankColumn(),
                         policies: [],
                         policiesLoaded: false,
-                        newPolicy: { name: '', operation: 'SELECT', role: '', conditions: [] },
+                        newPolicy: { name: '', operation: 'SELECT', expression: '' },
                     };
                 }
                 return tableUiMap[tableId];
-            }
-
-            function tableColumnNames(table) {
-                return table.columns.map(c => c.name).concat(['id']);
             }
 
             async function loadProject() {
@@ -437,40 +402,11 @@ ob_start();
                 }
             }
 
-            function coerceValue(row) {
-                switch (row.valueType) {
-                    case 'null':    return null;
-                    case 'number':  return Number(row.value);
-                    case 'boolean': return row.value === 'true';
-                    default:        return row.value;
-                }
-            }
-
-            function buildCondition(row) {
-                const noValueOps = ['is_null', 'is_not_null'];
-                if (row.op === 'eq') return coerceValue(row); // backward-compat scalar
-                if (noValueOps.includes(row.op)) return { op: row.op };
-                return { op: row.op, value: coerceValue(row) };
-            }
-
-            function formatConditions(conditions) {
-                const opLabels = { eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', is_null: 'IS NULL', is_not_null: 'IS NOT NULL' };
-                return Object.entries(conditions).map(([col, val]) => {
-                    if (val !== null && typeof val === 'object' && val.op) {
-                        const label = opLabels[val.op] || val.op;
-                        return val.value !== undefined ? `${col} ${label} ${val.value}` : `${col} ${label}`;
-                    }
-                    return `${col} = ${val}`;
-                }).join(', ');
-            }
-
             async function addPolicy(table) {
                 const state = ui(table.id);
                 const form = state.newPolicy;
                 if (!form.name.trim()) { toast.error('Policy name is required'); return; }
-
-                const conditions = {};
-                form.conditions.forEach(row => { conditions[row.column] = buildCondition(row); });
+                if (!form.expression.trim()) { toast.error('Expression is required'); return; }
 
                 try {
                     await apiFetch(`/projects/${PROJECT_ID}/tables/${table.id}/rls-policies`, {
@@ -478,11 +414,10 @@ ob_start();
                         body: JSON.stringify({
                             name: form.name,
                             operation: form.operation,
-                            role: form.role.trim() || null,
-                            conditions,
+                            expression: form.expression,
                         }),
                     });
-                    state.newPolicy = { name: '', operation: 'SELECT', role: '', conditions: [] };
+                    state.newPolicy = { name: '', operation: 'SELECT', expression: '' };
                     toast.success('Policy created');
                     await loadPolicies(table.id);
                 } catch (e) {
@@ -506,11 +441,11 @@ ob_start();
 
             return {
                 project, tables, loading, columnTypes, rlsOperations, authPlaceholders,
-                tableModal, tableForm, confirmState, ui, tableColumnNames,
+                tableModal, tableForm, confirmState, ui,
                 blankColumn,
                 openTableModal, createTable, toggleTable, startRename, submitRename, deleteTable,
                 addColumn, startEditColumn, submitEditColumn, deleteColumn,
-                addPolicy, deletePolicy, formatConditions,
+                addPolicy, deletePolicy,
             };
         }
     });

@@ -87,4 +87,12 @@ class Dashboard
             'projectId' => $params->project_id,
         ]);
     }
+
+    public static function projectStorage(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/projects/storage'), [
+            'activeNav' => 'storage',
+            'projectId' => $params->project_id,
+        ]);
+    }
 }
