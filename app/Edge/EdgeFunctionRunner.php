@@ -2,6 +2,8 @@
 
 namespace App\Edge;
 
+use AdaiasMagdiel\PdoRestify\Http\Request as RestRequest;
+use App\Controllers\Rest;
 use App\Database;
 use PDO;
 use Throwable;
@@ -162,6 +164,11 @@ class EdgeFunctionRunner
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
+            // Database bridge: the child writes query requests to fd 3 and
+            // reads our responses from fd 4. It never gets a PDO connection
+            // or database credentials directly — see App\Edge\Db.
+            3 => ['pipe', 'w'],
+            4 => ['pipe', 'r'],
         ], $pipes);
 
         if (!is_resource($process)) {
@@ -170,17 +177,21 @@ class EdgeFunctionRunner
 
         fwrite($pipes[0], $input ?: '{}');
         fclose($pipes[0]);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
+        foreach ([1, 2, 3] as $index) {
+            stream_set_blocking($pipes[$index], false);
+        }
 
         $stdout = '';
         $stderr = '';
+        $dbRequestBuffer = '';
         $deadline = microtime(true) + $timeout;
         $exitCode = null;
 
         while (true) {
             $stdout .= stream_get_contents($pipes[1]) ?: '';
             $stderr .= stream_get_contents($pipes[2]) ?: '';
+            $dbRequestBuffer .= stream_get_contents($pipes[3]) ?: '';
+            $dbRequestBuffer = $this->serviceDbRequests($dbRequestBuffer, $pipes[4], $projectId, $auth);
 
             $status = proc_get_status($process);
             if (!$status['running']) {
@@ -190,7 +201,7 @@ class EdgeFunctionRunner
 
             if (microtime(true) >= $deadline) {
                 proc_terminate($process);
-                foreach ([1, 2] as $index) {
+                foreach ([1, 2, 3, 4] as $index) {
                     fclose($pipes[$index]);
                 }
                 proc_close($process);
@@ -201,8 +212,9 @@ class EdgeFunctionRunner
             usleep(50000);
         }
 
-        foreach ([1, 2] as $index) {
-            $stdout .= stream_get_contents($pipes[$index]) ?: '';
+        $stdout .= stream_get_contents($pipes[1]) ?: '';
+        $stderr .= stream_get_contents($pipes[2]) ?: '';
+        foreach ([1, 2, 3, 4] as $index) {
             fclose($pipes[$index]);
         }
         proc_close($process);
@@ -224,6 +236,65 @@ class EdgeFunctionRunner
             (int) ($payload['status'] ?? 200),
             is_array($payload['headers'] ?? null) ? $payload['headers'] : [],
         );
+    }
+
+    /**
+     * Drains complete newline-delimited requests from the child's database
+     * bridge buffer, answers each one on $responsePipe, and returns
+     * whatever partial line is left over for the next call.
+     *
+     * @param resource $responsePipe
+     * @param array{id: int, email: string, role: ?string}|null $auth
+     */
+    private function serviceDbRequests(string $buffer, $responsePipe, int $projectId, ?array $auth): string
+    {
+        while (($newline = strpos($buffer, "\n")) !== false) {
+            $line = substr($buffer, 0, $newline);
+            $buffer = substr($buffer, $newline + 1);
+
+            $payload = json_decode($line, true);
+            $result = is_array($payload)
+                ? $this->handleDbCall($projectId, $auth, $payload)
+                : ['status' => 400, 'body' => null, 'error' => 'Invalid database request'];
+
+            $encoded = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            fwrite($responsePipe, ($encoded !== false ? $encoded : '{"status":500,"body":null,"error":"Internal error"}') . "\n");
+            fflush($responsePipe);
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Executes one edge-function database call against this project's own
+     * tables only, through the exact same pdo-restify Api + RLS conditions
+     * REST passthrough uses (see Rest::scopedApi()) — the sandboxed child
+     * never sees a PDO connection or another project's data.
+     *
+     * @param array{id: int, email: string, role: ?string}|null $auth
+     * @param array<string, mixed> $payload
+     * @return array{status: int, body: mixed, error: ?string}
+     */
+    private function handleDbCall(int $projectId, ?array $auth, array $payload): array
+    {
+        $method = strtoupper((string) ($payload['method'] ?? 'GET'));
+        $segments = trim((string) ($payload['path'] ?? ''), '/');
+        $parts = $segments === '' ? [] : explode('/', $segments);
+        $table = array_shift($parts) ?? '';
+        $id = $parts[0] ?? null;
+
+        $query = is_array($payload['query'] ?? null) ? $payload['query'] : [];
+        $body = is_array($payload['body'] ?? null) ? $payload['body'] : [];
+
+        $scoped = Rest::scopedApi($this->pdo, $projectId, $table, $auth);
+        if ($scoped === null) {
+            return ['status' => 404, 'body' => ['error' => 'Resource not found'], 'error' => 'Resource not found'];
+        }
+
+        $restPath = $scoped['physicalTable'] . ($id !== null ? '/' . $id : '');
+        $response = $scoped['api']->handle(new RestRequest($method, $restPath, $query, $body));
+
+        return ['status' => $response->status, 'body' => $response->body, 'error' => null];
     }
 
     /**
@@ -274,7 +345,7 @@ class EdgeFunctionRunner
             return null;
         }
 
-        foreach (['SandboxRunner.php', 'FunctionRequest.php', 'FunctionResponse.php', 'Http.php'] as $file) {
+        foreach (['SandboxRunner.php', 'FunctionRequest.php', 'FunctionResponse.php', 'Http.php', 'DbResult.php', 'DbQuery.php', 'Db.php'] as $file) {
             $source = __DIR__ . '/' . $file;
             $target = $runtimeDir . '/' . $file;
 

@@ -1,11 +1,15 @@
 <?php
 
+use App\Edge\Db;
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
 
 require_once __DIR__ . '/FunctionRequest.php';
 require_once __DIR__ . '/FunctionResponse.php';
 require_once __DIR__ . '/Http.php';
+require_once __DIR__ . '/DbResult.php';
+require_once __DIR__ . '/DbQuery.php';
+require_once __DIR__ . '/Db.php';
 
 $input = json_decode(stream_get_contents(STDIN), true);
 
@@ -21,6 +25,13 @@ if ($codePath === '' || !is_file($codePath)) {
 }
 
 $requestData = $input['request'] ?? [];
+
+try {
+    $db = new Db();
+} catch (\Throwable) {
+    $db = null;
+}
+
 $request = new FunctionRequest(
     (int) ($requestData['project_id'] ?? 0),
     (string) ($requestData['method'] ?? 'POST'),
@@ -29,6 +40,7 @@ $request = new FunctionRequest(
     is_array($requestData['body'] ?? null) ? $requestData['body'] : [],
     is_array($requestData['function'] ?? null) ? $requestData['function'] : [],
     is_array($requestData['auth'] ?? null) ? $requestData['auth'] : null,
+    $db,
 );
 
 ob_start();

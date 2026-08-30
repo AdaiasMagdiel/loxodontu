@@ -18,7 +18,19 @@
             <directory>app</directory>
         </include>
         <exclude>
+            <!--
+                These only ever execute inside the sandboxed child process
+                spawned for a source-code edge function (see
+                EdgeFunctionRunner::invokeSource()), never in the PHPUnit
+                process itself, so Xdebug/PCOV can't observe them running —
+                same reasoning as SandboxRunner.php below. They're covered
+                behaviorally through EdgeFunctionsTest's database-bridge
+                tests, just not line-by-line here.
+            -->
             <file>app/Edge/SandboxRunner.php</file>
+            <file>app/Edge/Db.php</file>
+            <file>app/Edge/DbQuery.php</file>
+            <file>app/Edge/DbResult.php</file>
         </exclude>
     </source>
     <php>

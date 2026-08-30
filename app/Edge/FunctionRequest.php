@@ -19,5 +19,6 @@ class FunctionRequest
         public readonly array $body,
         public readonly array $function,
         public readonly ?array $auth = null,
+        public readonly ?Db $db = null,
     ) {}
 }

@@ -426,3 +426,161 @@ test('cron jobs can invoke edge functions', function () {
 
     expect(json($runs)[0]['output'])->toContain('from cron');
 });
+
+test('an edge function can read and write the project\'s own table through $request->db', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+    $table = createTable($owner['token'], $project['id'], 'notes', [
+        ['name' => 'title', 'type' => 'text'],
+    ]);
+
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
+
+    $source = <<<'PHP'
+<?php
+
+use App\Edge\FunctionRequest;
+use App\Edge\FunctionResponse;
+
+return function (FunctionRequest $request): FunctionResponse {
+    $inserted = $request->db->table('notes')->insert(['title' => 'from function']);
+    $rows = $request->db->table('notes')->select()->get();
+
+    return FunctionResponse::json([
+        'insert_status' => $inserted->status,
+        'inserted_title' => $inserted->body['title'] ?? null,
+        'rows' => $rows->body,
+    ]);
+};
+PHP;
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json' => [
+            'name' => 'Notes writer',
+            'slug' => 'notes-writer',
+            'source_code' => $source,
+            'methods' => ['GET'],
+            'require_api_key' => false,
+        ],
+    ]);
+
+    $response = api()->get("/api/v1/{$project['id']}/functions/notes-writer");
+    $body = json($response);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect($body['insert_status'])->toBe(200);
+    expect($body['inserted_title'])->toBe('from function');
+    expect($body['rows'])->toHaveCount(1);
+    expect($body['rows'][0]['title'])->toBe('from function');
+});
+
+test('the edge function database bridge enforces RLS by the calling end user', function () {
+    [$ownerToken, $project, $table] = postsTableForRls();
+    $key = createApiKey($ownerToken, $project['id'], ['select', 'insert', 'update', 'delete', 'function']);
+
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'expression' => 'created_by = $auth.id']);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'INSERT', 'expression' => 'created_by = $auth.id']);
+
+    $userA = registerEndUser($project['id']);
+    $userB = registerEndUser($project['id']);
+
+    $source = <<<'PHP'
+<?php
+
+use App\Edge\FunctionRequest;
+use App\Edge\FunctionResponse;
+
+return function (FunctionRequest $request): FunctionResponse {
+    $insert = $request->db->table('posts')->insert([
+        'title' => 'mine',
+        'created_by' => $request->auth['id'] ?? null,
+    ]);
+
+    $rows = $request->db->table('posts')->select()->get();
+
+    return FunctionResponse::json([
+        'insert_ok' => $insert->ok,
+        'rows' => $rows->body,
+    ]);
+};
+PHP;
+
+    api()->post("/api/v1/projects/{$project['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$ownerToken}"],
+        'json' => [
+            'name' => 'Whoami posts',
+            'slug' => 'whoami-posts',
+            'source_code' => $source,
+            'methods' => ['GET'],
+            'require_api_key' => true,
+        ],
+    ]);
+
+    $responseA = api()->get("/api/v1/{$project['id']}/functions/whoami-posts", [
+        'headers' => [
+            'Authorization' => "Bearer {$key['key']}",
+            'X-User-Token' => $userA['token'],
+        ],
+    ]);
+    $bodyA = json($responseA);
+
+    $responseB = api()->get("/api/v1/{$project['id']}/functions/whoami-posts", [
+        'headers' => [
+            'Authorization' => "Bearer {$key['key']}",
+            'X-User-Token' => $userB['token'],
+        ],
+    ]);
+    $bodyB = json($responseB);
+
+    expect($bodyA['insert_ok'])->toBeTrue();
+    expect($bodyA['rows'])->toHaveCount(1);
+    expect($bodyB['insert_ok'])->toBeTrue();
+    expect($bodyB['rows'])->toHaveCount(1);
+    expect($bodyB['rows'][0]['created_by'])->not->toBe($bodyA['rows'][0]['created_by']);
+});
+
+test('the edge function database bridge cannot reach another project\'s table', function () {
+    $ownerA = registerPlatformUser();
+    $projectA = createProject($ownerA['token']);
+
+    $ownerB = registerPlatformUser();
+    $projectB = createProject($ownerB['token']);
+    createTable($ownerB['token'], $projectB['id'], 'secrets', [
+        ['name' => 'value', 'type' => 'text'],
+    ]);
+
+    $source = <<<'PHP'
+<?php
+
+use App\Edge\FunctionRequest;
+use App\Edge\FunctionResponse;
+
+return function (FunctionRequest $request): FunctionResponse {
+    $result = $request->db->table('secrets')->select()->get();
+
+    return FunctionResponse::json([
+        'status' => $result->status,
+        'ok' => $result->ok,
+    ]);
+};
+PHP;
+
+    api()->post("/api/v1/projects/{$projectA['id']}/functions", [
+        'headers' => ['Authorization' => "Bearer {$ownerA['token']}"],
+        'json' => [
+            'name' => 'Leak attempt',
+            'slug' => 'leak-attempt',
+            'source_code' => $source,
+            'methods' => ['GET'],
+            'require_api_key' => false,
+        ],
+    ]);
+
+    $response = api()->get("/api/v1/{$projectA['id']}/functions/leak-attempt");
+    $body = json($response);
+
+    expect($response->getStatusCode())->toBe(200);
+    expect($body['ok'])->toBeFalse();
+    expect($body['status'])->toBe(404);
+});

@@ -64,57 +64,15 @@ class Rest
 
         $table = $params->table;
 
-        $stmt = $pdo->prepare(
-            'SELECT id FROM project_tables WHERE project_id = ? AND name = ? LIMIT 1'
-        );
-        $stmt->execute([$projectId, $table]);
-        $projectTable = $stmt->fetch();
+        $auth = EndUserAuth::resolve($pdo, $req, $projectId);
 
-        if (!$projectTable) {
+        $scoped = self::scopedApi($pdo, (int) $projectId, $table, $auth);
+        if ($scoped === null) {
             return $res->setStatusCode(404)->withJson(['error' => 'Resource not found']);
         }
 
-        $stmt = $pdo->prepare(
-            'SELECT name FROM project_columns
-             WHERE table_id = ?
-             ORDER BY position ASC, id ASC'
-        );
-        $stmt->execute([$projectTable['id']]);
-        $columns = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-
-        if (!in_array('id', $columns, true)) {
-            array_unshift($columns, 'id');
-        }
-
-        $auth = EndUserAuth::resolve($pdo, $req, $projectId);
-
-        $stmt = $pdo->prepare(
-            'SELECT operation, expression FROM project_rls_policies
-             WHERE table_id = ? AND enabled = 1'
-        );
-        $stmt->execute([$projectTable['id']]);
-        $rlsPolicies = $stmt->fetchAll();
-
-        $policyConditions = PolicyEngine::resolve($rlsPolicies, $auth);
-
-        $physicalTable = Tables::physicalName((int) $projectId, $table);
-        $resource      = (new Resource($physicalTable))->columns($columns);
-
-        // Every operation is allow()-ed regardless of which one this request is
-        // for — pdo-restify needs e.g. the select policy internally to echo back
-        // an inserted/updated row. The API key's own permission gate above
-        // already restricts which operation *this* request may invoke; a null
-        // condition here means no RLS policies exist for that operation (fully
-        // open), not a denial — a policy that does exist but never matches this
-        // caller/row simply filters everything out via ordinary SQL, with no
-        // separate "deny" case to special-case.
-        foreach (Operation::cases() as $op) {
-            $condition = $policyConditions[$op->value];
-            $resource->allow($op, fn(array $ctx) => $condition);
-        }
-
-        $api  = (new Api($pdo))->register($resource);
-        $path = $physicalTable . (isset($params->id) ? '/' . $params->id : '');
+        $api  = $scoped['api'];
+        $path = $scoped['physicalTable'] . (isset($params->id) ? '/' . $params->id : '');
 
         try {
             $body = $req->getJson() ?? [];
@@ -153,6 +111,71 @@ class Rest
         }
 
         return substr($header, 7);
+    }
+
+    /**
+     * Builds a pdo-restify Api scoped to a single logical table of one
+     * project, with RLS policies resolved and applied exactly as REST
+     * passthrough enforces them. This is the one place that maps a
+     * project-scoped logical table name to its physical table and its
+     * access rules — REST passthrough and the edge-function database
+     * bridge (App\Edge\EdgeFunctionRunner) both go through here, so neither
+     * can drift from the other's isolation guarantees.
+     *
+     * @param array{id: int, email: string, role: ?string}|null $auth
+     * @return array{api: Api, physicalTable: string}|null Null if the table doesn't exist for this project.
+     */
+    public static function scopedApi(\PDO $pdo, int $projectId, string $table, ?array $auth): ?array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT id FROM project_tables WHERE project_id = ? AND name = ? LIMIT 1'
+        );
+        $stmt->execute([$projectId, $table]);
+        $projectTable = $stmt->fetch();
+
+        if (!$projectTable) {
+            return null;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT name FROM project_columns
+             WHERE table_id = ?
+             ORDER BY position ASC, id ASC'
+        );
+        $stmt->execute([$projectTable['id']]);
+        $columns = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        if (!in_array('id', $columns, true)) {
+            array_unshift($columns, 'id');
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT operation, expression FROM project_rls_policies
+             WHERE table_id = ? AND enabled = 1'
+        );
+        $stmt->execute([$projectTable['id']]);
+        $rlsPolicies = $stmt->fetchAll();
+
+        $policyConditions = PolicyEngine::resolve($rlsPolicies, $auth);
+
+        $physicalTable = Tables::physicalName($projectId, $table);
+        $resource      = (new Resource($physicalTable))->columns($columns);
+
+        // Every operation is allow()-ed regardless of which one this request is
+        // for — pdo-restify needs e.g. the select policy internally to echo back
+        // an inserted/updated row. The caller's own permission gate (API key
+        // permissions for REST, nothing extra for edge functions) already
+        // restricts which operation *this* request may invoke; a null
+        // condition here means no RLS policies exist for that operation (fully
+        // open), not a denial — a policy that does exist but never matches this
+        // caller/row simply filters everything out via ordinary SQL, with no
+        // separate "deny" case to special-case.
+        foreach (Operation::cases() as $op) {
+            $condition = $policyConditions[$op->value];
+            $resource->allow($op, fn(array $ctx) => $condition);
+        }
+
+        return ['api' => (new Api($pdo))->register($resource), 'physicalTable' => $physicalTable];
     }
 
 }
