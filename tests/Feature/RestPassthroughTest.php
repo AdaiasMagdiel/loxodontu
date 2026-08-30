@@ -69,9 +69,9 @@ test('an RLS policy can filter rows by a literal (non-placeholder) value', funct
         ['name' => 'status', 'type' => 'text'],
     ]);
     $key = createApiKey($owner['token'], $project['id'], ['select', 'insert']);
-    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'INSERT', 'conditions' => []]);
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'INSERT', 'expression' => '1=1']);
     createRlsPolicy($owner['token'], $project['id'], $table['id'], [
-        'operation' => 'SELECT', 'conditions' => ['status' => 'published'],
+        'operation' => 'SELECT', 'expression' => "status = 'published'",
     ]);
 
     api()->post("/api/v1/{$project['id']}/rest/posts", [

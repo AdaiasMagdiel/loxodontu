@@ -121,13 +121,13 @@ test('storage policies scope access to the owning end user, like table RLS', fun
     $key     = createApiKey($owner['token'], $project['id'], ['storage:select', 'storage:insert', 'storage:delete']);
 
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'INSERT', 'conditions' => ['owner_id' => '$auth.id'],
+        'operation' => 'INSERT', 'expression' => 'owner_id = $auth.id',
     ]);
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'SELECT', 'conditions' => ['owner_id' => '$auth.id'],
+        'operation' => 'SELECT', 'expression' => 'owner_id = $auth.id',
     ]);
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'DELETE', 'conditions' => ['owner_id' => '$auth.id'],
+        'operation' => 'DELETE', 'expression' => 'owner_id = $auth.id',
     ]);
 
     $userA = registerEndUser($project['id']);
@@ -140,11 +140,12 @@ test('storage policies scope access to the owning end user, like table RLS', fun
     $objectA = json($uploadA);
     expect($objectA['owner_id'])->toBe($userA['user']['id']);
 
-    // Anonymous (no X-User-Token) insert is denied: owner_id resolves to NULL, no
-    // policy role restriction was set, but the forced condition still requires a match.
+    // An object's owner_id is always the uploader (Storage's own rule, not policy-set —
+    // see Storage::store()). Anonymous has no identity, so owner_id ends up NULL; the
+    // INSERT policy's WITH CHECK (owner_id = $auth.id) then compares NULL = NULL, which
+    // SQL never treats as true, so the upload is rejected and the row rolled back.
     $anonUpload = uploadObject($key['key'], $project['id'], $bucket['name'], 'anon.txt');
-    expect($anonUpload->getStatusCode())->toBe(201); // owner_id forced to NULL, insert still allowed
-    expect(json($anonUpload)['owner_id'])->toBeNull();
+    expect($anonUpload->getStatusCode())->toBe(403);
 
     $bDownloadsA = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}/{$objectA['id']}", [
         'headers' => ['Authorization' => "Bearer {$key['key']}", 'X-User-Token' => $userB['token']],
@@ -363,26 +364,31 @@ test('storage policies can deny list/insert/update entirely for a role-restricte
     $key     = createApiKey($owner['token'], $project['id'], ['storage:select', 'storage:insert', 'storage:update']);
 
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'SELECT', 'role' => 'manager', 'conditions' => [],
+        'operation' => 'SELECT', 'expression' => "\$auth.role = 'manager'",
     ]);
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'INSERT', 'role' => 'manager', 'conditions' => [],
+        'operation' => 'INSERT', 'expression' => "\$auth.role = 'manager'",
     ]);
     createStoragePolicy($owner['token'], $project['id'], $bucket['id'], [
-        'operation' => 'UPDATE', 'role' => 'manager', 'conditions' => [],
+        'operation' => 'UPDATE', 'expression' => "\$auth.role = 'manager'",
     ]);
 
     $plainUser = registerEndUser($project['id']);
 
+    // INSERT's WITH CHECK rejects the write outright (403) — there's no "row" to hide
+    // a denial behind yet.
     $deniedUpload = uploadObject($key['key'], $project['id'], $bucket['name'], 'x.txt', 'x', 'text/plain', [
         'X-User-Token' => $plainUser['token'],
     ]);
     expect($deniedUpload->getStatusCode())->toBe(403);
 
+    // SELECT has no WITH CHECK equivalent — a non-matching role just filters every row
+    // out via the WHERE clause, same as real RLS: 200 with an empty list, not a 403.
     $deniedList = api()->get("/api/v1/{$project['id']}/storage/{$bucket['name']}", [
         'headers' => ['Authorization' => "Bearer {$key['key']}", 'X-User-Token' => $plainUser['token']],
     ]);
-    expect($deniedList->getStatusCode())->toBe(403);
+    expect($deniedList->getStatusCode())->toBe(200);
+    expect(json($deniedList))->toBe([]);
 
     $manager = registerEndUser($project['id']);
     setEndUserRole($owner['token'], $project['id'], $manager['user']['id'], 'manager');

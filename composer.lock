@@ -102,16 +102,16 @@
         },
         {
             "name": "adaiasmagdiel/pdo-restify",
-            "version": "v0.5.0",
+            "version": "v0.6.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/AdaiasMagdiel/pdo-restify.git",
-                "reference": "041dc4d04a5440c38044fb112373291a7e010f86"
+                "reference": "88d252d8342e8557319377ebd592199237ed1e57"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/AdaiasMagdiel/pdo-restify/zipball/041dc4d04a5440c38044fb112373291a7e010f86",
-                "reference": "041dc4d04a5440c38044fb112373291a7e010f86",
+                "url": "https://api.github.com/repos/AdaiasMagdiel/pdo-restify/zipball/88d252d8342e8557319377ebd592199237ed1e57",
+                "reference": "88d252d8342e8557319377ebd592199237ed1e57",
                 "shasum": ""
             },
             "require": {
@@ -144,9 +144,9 @@
             "description": "A framework-agnostic REST API layer on top of PDO, for MySQL, MariaDB and SQLite.",
             "support": {
                 "issues": "https://github.com/AdaiasMagdiel/pdo-restify/issues",
-                "source": "https://github.com/AdaiasMagdiel/pdo-restify/tree/v0.5.0"
+                "source": "https://github.com/AdaiasMagdiel/pdo-restify/tree/v0.6.0"
             },
-            "time": "2026-08-29T20:58:20+00:00"
+            "time": "2026-08-29T23:59:53+00:00"
         },
         {
             "name": "graham-campbell/result-type",

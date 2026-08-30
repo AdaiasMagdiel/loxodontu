@@ -104,7 +104,7 @@ test('clamps a negative offset up to 0', function () {
 test('Keys, RlsPolicies and EndUsers index endpoints all expose pagination headers', function () {
     [$token, $project, $table] = postsTableForRls();
     createApiKey($token, $project['id'], ['select']);
-    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'SELECT', 'conditions' => []]);
+    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'SELECT', 'expression' => '1=1']);
     registerEndUser($project['id']);
 
     $keys = api()->get("/api/v1/projects/{$project['id']}/keys", [

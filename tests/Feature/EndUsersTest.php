@@ -252,7 +252,7 @@ test('logging out invalidates the end user token for REST passthrough', function
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);
     $table = createTable($owner['token'], $project['id'], 'posts', [['name' => 'title', 'type' => 'text']]);
-    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'SELECT', 'role' => 'nobody', 'conditions' => []]);
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'SELECT', 'expression' => "\$auth.role = 'nobody'"]);
     $key = createApiKey($owner['token'], $project['id'], ['select']);
     $user = registerEndUser($project['id']);
 
@@ -261,9 +261,13 @@ test('logging out invalidates the end user token for REST passthrough', function
     ]);
     expect($logout->getStatusCode())->toBe(204);
 
-    // SELECT is role-gated to "nobody", so a stale/invalid X-User-Token must not resolve to anyone.
+    // SELECT is role-gated to "nobody", so a stale/invalid X-User-Token must not resolve
+    // to anyone — the $auth.role placeholder binds to NULL, which never equals 'nobody',
+    // so every row is filtered out (200 with an empty list, not a 403: nothing here is
+    // "forbidden", the policy's WHERE just matches no rows for an unauthenticated caller).
     $response = api()->get("/api/v1/{$project['id']}/rest/posts", [
         'headers' => ['Authorization' => "Bearer {$key['key']}", 'X-User-Token' => $user['token']],
     ]);
-    expect($response->getStatusCode())->toBe(403);
+    expect($response->getStatusCode())->toBe(200);
+    expect(json($response))->toBe([]);
 });

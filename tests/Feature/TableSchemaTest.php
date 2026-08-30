@@ -44,7 +44,7 @@ test('renames a table, and the physical data survives the rename', function () {
     $project = createProject($owner['token']);
     $table = createTable($owner['token'], $project['id'], 'posts', [['name' => 'title', 'type' => 'text']]);
     $key = createApiKey($owner['token'], $project['id'], ['select', 'insert']);
-    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
 
     api()->post("/api/v1/{$project['id']}/rest/posts", [
         'headers' => ['Authorization' => "Bearer {$key['key']}"],
@@ -149,7 +149,7 @@ test('adds a column to an existing table, appended after the existing ones', fun
     expect($col['position'])->toBe(2); // after title (0) and created_by (1)
 
     $key = createApiKey($token, $project['id'], ['select', 'insert']);
-    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
     $insert = api()->post("/api/v1/{$project['id']}/rest/posts", [
         'headers' => ['Authorization' => "Bearer {$key['key']}"],
         'json'    => ['title' => 'x', 'views' => 5],
@@ -242,7 +242,7 @@ test('404s adding a column to a table the caller does not own', function () {
 test('renames a column, and existing data survives under the new name', function () {
     [$token, $project, $table] = postsTableForRls();
     $key = createApiKey($token, $project['id'], ['select', 'insert']);
-    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
     api()->post("/api/v1/{$project['id']}/rest/posts", [
         'headers' => ['Authorization' => "Bearer {$key['key']}"],
         'json'    => ['title' => 'hello'],
@@ -278,7 +278,7 @@ test('changes a column\'s type, nullability, and default', function () {
     expect($col['default_value'])->toBe('anonymous');
 
     $key = createApiKey($token, $project['id'], ['select', 'insert']);
-    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($token, $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
     $insert = api()->post("/api/v1/{$project['id']}/rest/posts", [
         'headers' => ['Authorization' => "Bearer {$key['key']}"],
         'json'    => ['title' => 'x'],

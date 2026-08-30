@@ -180,7 +180,7 @@ test('applies default values per column type when creating the physical table', 
         ['name' => 'meta', 'type' => 'json', 'nullable' => true],
     ]);
     $key = createApiKey($owner['token'], $project['id'], ['select', 'insert']);
-    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
 
     // Every column but the required "title" is left out — their DB-level defaults should kick in.
     $insert = api()->post("/api/v1/{$project['id']}/rest/widgets", [
@@ -230,7 +230,7 @@ test('creates a table with a physical backing table usable via REST passthrough'
 
     createRlsPolicy($owner['token'], $project['id'], $table['id'], [
         'operation' => 'ALL',
-        'conditions' => [],
+        'expression' => '1=1',
     ]);
 
     $insert = api()->post("/api/v1/{$project['id']}/rest/posts", [

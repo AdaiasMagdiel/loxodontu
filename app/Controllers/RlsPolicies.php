@@ -10,9 +10,9 @@ use stdClass;
 
 class RlsPolicies
 {
-    private const VALID_OPERATIONS   = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
-    private const VALID_PLACEHOLDERS = ['$auth.id', '$auth.email', '$auth.role'];
-    private const VALID_OPS          = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'];
+    private const VALID_OPERATIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
+    private const MAX_EXPRESSION_LENGTH = 10000;
+    private const VALID_PLACEHOLDERS = ['id', 'email', 'role'];
 
     public static function index(Request $req, Response $res, stdClass $params): Response
     {
@@ -30,15 +30,14 @@ class RlsPolicies
         $total = (int) $countStmt->fetchColumn();
 
         $stmt = $pdo->prepare(
-            "SELECT id, name, role, operation, expression, enabled, created_at, updated_at
+            "SELECT id, name, operation, expression, enabled, created_at, updated_at
              FROM project_rls_policies WHERE table_id = ? ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$table['id']]);
         $policies = $stmt->fetchAll();
 
         foreach ($policies as &$policy) {
-            $policy['expression'] = json_decode($policy['expression'], true) ?? [];
-            $policy['enabled']    = (bool) $policy['enabled'];
+            $policy['enabled'] = (bool) $policy['enabled'];
         }
         unset($policy);
 
@@ -59,11 +58,10 @@ class RlsPolicies
             return $res->setStatusCode(404)->withJson(['error' => 'Table not found']);
         }
 
-        $name      = trim($body['name'] ?? '');
-        $operation = strtoupper(trim($body['operation'] ?? ''));
-        $condition = $body['conditions'] ?? [];
-        $role      = array_key_exists('role', $body) ? $body['role'] : null;
-        $enabled   = array_key_exists('enabled', $body) ? (bool) $body['enabled'] : true;
+        $name       = trim($body['name'] ?? '');
+        $operation  = strtoupper(trim($body['operation'] ?? ''));
+        $expression = trim($body['expression'] ?? '');
+        $enabled    = array_key_exists('enabled', $body) ? (bool) $body['enabled'] : true;
 
         if ($name === '') {
             return $res->setStatusCode(422)->withJson(['error' => 'name is required']);
@@ -75,68 +73,22 @@ class RlsPolicies
             ]);
         }
 
-        if ($role !== null && (!is_string($role) || !preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $role))) {
-            return $res->setStatusCode(422)->withJson(['error' => 'role must be null or an alphanumeric string (max 64 chars)']);
-        }
-
-        // Empty conditions is valid: it means "no extra row restriction" for
-        // whichever role this policy applies to (or everyone, if role is null).
-        if (!is_array($condition)) {
-            return $res->setStatusCode(422)->withJson(['error' => 'conditions must be an object of column => value']);
-        }
-
-        $columns = self::columnNames($pdo, $table['id']);
-        foreach ($condition as $column => $value) {
-            if (!in_array($column, $columns, true)) {
-                return $res->setStatusCode(422)->withJson(['error' => "unknown column in conditions: {$column}"]);
-            }
-            if (is_array($value)) {
-                // Operator condition: { "op": "gt", "value": 5 } or { "op": "is_null" }
-                $op = $value['op'] ?? null;
-                if (!is_string($op) || !in_array($op, self::VALID_OPS, true)) {
-                    return $res->setStatusCode(422)->withJson([
-                        'error' => "conditions.{$column}.op must be one of: " . implode(', ', self::VALID_OPS),
-                    ]);
-                }
-                $noValueOps = ['is_null', 'is_not_null'];
-                if (!in_array($op, $noValueOps, true)) {
-                    if (!array_key_exists('value', $value)) {
-                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value is required for op '{$op}'"]);
-                    }
-                    $val = $value['value'];
-                    if (is_string($val) && str_starts_with($val, '$auth.') && !in_array($val, self::VALID_PLACEHOLDERS, true)) {
-                        return $res->setStatusCode(422)->withJson([
-                            'error' => "invalid placeholder '{$val}' for conditions.{$column}.value; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
-                        ]);
-                    }
-                    if (!is_scalar($val) && $val !== null) {
-                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value must be a scalar or placeholder"]);
-                    }
-                }
-            } else {
-                // Scalar condition (implicit eq) — anything non-array decoded from JSON
-                // is already a scalar or null, so there's nothing else to validate here.
-                if (is_string($value) && str_starts_with($value, '$auth.') && !in_array($value, self::VALID_PLACEHOLDERS, true)) {
-                    return $res->setStatusCode(422)->withJson([
-                        'error' => "invalid placeholder '{$value}' for conditions.{$column}; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
-                    ]);
-                }
-            }
+        if ($error = self::validateExpression($expression)) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
         }
 
         $pdo->prepare(
-            'INSERT INTO project_rls_policies (table_id, name, role, operation, expression, enabled)
-             VALUES (?, ?, ?, ?, ?, ?)'
-        )->execute([$table['id'], $name, $role, $operation, json_encode($condition), (int) $enabled]);
+            'INSERT INTO project_rls_policies (table_id, name, operation, expression, enabled)
+             VALUES (?, ?, ?, ?, ?)'
+        )->execute([$table['id'], $name, $operation, $expression, (int) $enabled]);
 
         $id = (int) $pdo->lastInsertId();
 
         return $res->setStatusCode(201)->withJson([
             'id'         => $id,
             'name'       => $name,
-            'role'       => $role,
             'operation'  => $operation,
-            'conditions' => $condition,
+            'expression' => $expression,
             'enabled'    => $enabled,
         ]);
     }
@@ -163,6 +115,37 @@ class RlsPolicies
         return $res->setStatusCode(204);
     }
 
+    /**
+     * Cheap guardrails, not a security boundary (the author is a platform
+     * owner who already has unrestricted SQL access via the SQL Editor) —
+     * these just turn common mistakes into a friendly 422 instead of a
+     * confusing runtime SQL error.
+     */
+    public static function validateExpression(string $expression): ?string
+    {
+        if ($expression === '') {
+            return 'expression is required';
+        }
+
+        if (strlen($expression) > self::MAX_EXPRESSION_LENGTH) {
+            return 'expression is too long (max ' . self::MAX_EXPRESSION_LENGTH . ' characters)';
+        }
+
+        if (preg_match('/;|--|\/\*/', $expression)) {
+            return 'expression must be a single boolean expression: ";", "--" and "/*" are not allowed';
+        }
+
+        if (preg_match_all('/\$auth\.(\w+)/', $expression, $matches)) {
+            foreach ($matches[1] as $name) {
+                if (!in_array($name, self::VALID_PLACEHOLDERS, true)) {
+                    return "unknown placeholder \$auth.{$name}; use one of: " . implode(', ', array_map(fn($p) => "\$auth.{$p}", self::VALID_PLACEHOLDERS));
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static function findOwnedTable(\PDO $pdo, mixed $publicProjectId, mixed $tableId, int $userId): array|false
     {
         $stmt = $pdo->prepare(
@@ -173,14 +156,5 @@ class RlsPolicies
         );
         $stmt->execute([$tableId, $publicProjectId, $userId]);
         return $stmt->fetch();
-    }
-
-    private static function columnNames(\PDO $pdo, int $tableId): array
-    {
-        $stmt = $pdo->prepare('SELECT name FROM project_columns WHERE table_id = ?');
-        $stmt->execute([$tableId]);
-        $names = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-        $names[] = 'id';
-        return $names;
     }
 }

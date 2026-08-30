@@ -3,8 +3,9 @@
 Storage organizes files into per-project **buckets**. Each object's metadata (path, size,
 mime type, owner) is a row in `project_storage_objects`; the binary content is written to
 local disk. Access control reuses the same RLS engine as [table RLS](keys-and-rls.md) —
-buckets get **storage policies** with the same `role` / `operation` / `conditions` shape,
-just scoped to a bucket instead of a table.
+buckets get **storage policies** with the same `operation` / `expression` shape (a raw SQL
+boolean expression, see [keys-and-rls.md](keys-and-rls.md#expression-real-sql-not-a-condition-dsl)
+for the full model), just scoped to a bucket instead of a table.
 
 ## Management (platform owner)
 
@@ -15,16 +16,23 @@ just scoped to a bucket instead of a table.
 | PATCH  | `/projects/{id}/storage/buckets/{bucket_id}`                        | Toggle `public`                       |
 | DELETE | `/projects/{id}/storage/buckets/{bucket_id}`                        | Delete a bucket (and its objects)     |
 | GET    | `/projects/{id}/storage/buckets/{bucket_id}/policies`               | List a bucket's storage policies      |
-| POST   | `/projects/{id}/storage/buckets/{bucket_id}/policies`               | Create a policy (`{ name, operation, role?, conditions, enabled? }`) |
+| POST   | `/projects/{id}/storage/buckets/{bucket_id}/policies`               | Create a policy (`{ name, operation, expression, enabled? }`) |
 | DELETE | `/projects/{id}/storage/buckets/{bucket_id}/policies/{policy_id}`   | Delete a policy                       |
 
-`conditions` reference the fixed columns of an object: `id`, `bucket_id`, `path`, `owner_id`,
+`expression` references the fixed columns of an object: `id`, `bucket_id`, `path`, `owner_id`,
 `size`, `mime_type`, `created_at`, `updated_at` — plus the usual `$auth.id` / `$auth.email` /
-`$auth.role` placeholders. A common pattern is scoping uploads/reads/deletes to the uploader:
+`$auth.role` placeholders. `owner_id` is always set by Storage itself to the uploading end
+user (or `NULL` for an anonymous upload) — it's never client-choosable, so scoping to it is
+reliable. A common pattern is scoping uploads/reads/deletes to the uploader:
 
 ```json
-{ "operation": "ALL", "conditions": { "owner_id": "$auth.id" } }
+{ "operation": "ALL", "expression": "owner_id = $auth.id" }
 ```
+
+On `INSERT`/`UPDATE` this is also the `WITH CHECK`: an upload whose (Storage-assigned)
+`owner_id` doesn't satisfy the policy is rejected with `403` before the file ever touches
+disk — e.g. an anonymous upload (`owner_id` is `NULL`) against the policy above, since SQL
+never treats `NULL = NULL` as true.
 
 ## Object passthrough
 

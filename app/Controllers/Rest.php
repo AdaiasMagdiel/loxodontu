@@ -7,7 +7,6 @@ use AdaiasMagdiel\Erlenmeyer\Response as ErlResponse;
 use AdaiasMagdiel\PdoRestify\Api;
 use AdaiasMagdiel\PdoRestify\Http\Request as RestRequest;
 use AdaiasMagdiel\PdoRestify\Operation;
-use AdaiasMagdiel\PdoRestify\QueryBuilder;
 use AdaiasMagdiel\PdoRestify\Resource;
 use App\Auth\EndUserAuth;
 use App\Database;
@@ -90,7 +89,7 @@ class Rest
         $auth = EndUserAuth::resolve($pdo, $req, $projectId);
 
         $stmt = $pdo->prepare(
-            'SELECT role, operation, expression FROM project_rls_policies
+            'SELECT operation, expression FROM project_rls_policies
              WHERE table_id = ? AND enabled = 1'
         );
         $stmt->execute([$projectTable['id']]);
@@ -101,39 +100,17 @@ class Rest
         $physicalTable = Tables::physicalName((int) $projectId, $table);
         $resource      = (new Resource($physicalTable))->columns($columns);
 
+        // Every operation is allow()-ed regardless of which one this request is
+        // for — pdo-restify needs e.g. the select policy internally to echo back
+        // an inserted/updated row. The API key's own permission gate above
+        // already restricts which operation *this* request may invoke; a null
+        // condition here means no RLS policies exist for that operation (fully
+        // open), not a denial — a policy that does exist but never matches this
+        // caller/row simply filters everything out via ordinary SQL, with no
+        // separate "deny" case to special-case.
         foreach (Operation::cases() as $op) {
-            $frozen = $policyConditions[$op->value];
-
-            if ($frozen === null) {
-                continue; // not allow()-ed => pdo-restify denies with 403 if the client attempts it
-            }
-
-            $resource->allow($op, fn(array $ctx) => $frozen);
-        }
-
-        // pdo-restify's update()/delete() re-fetch the row via the SELECT policy to build
-        // their response/404, not the UPDATE/DELETE policy — so when SELECT is public but
-        // UPDATE/DELETE is owner-scoped (a very normal RLS setup), a write blocked by RLS
-        // still comes back 200 with the untouched row instead of 404. Pre-check visibility
-        // under the actual write policy ourselves so a denied write fails honestly.
-        if (in_array($method, ['PATCH', 'PUT', 'DELETE'], true) && isset($params->id)) {
-            $writeOp         = $method === 'DELETE' ? 'delete' : 'update';
-            $writeConditions = $policyConditions[$writeOp];
-
-            if ($writeConditions !== null) {
-                $checkConditions = $writeConditions;
-                $checkConditions['id'] = $params->id;
-
-                [$checkSql, $checkParams] = QueryBuilder::select($physicalTable, ['id'], [], $checkConditions, null, 1, 0);
-                $checkStmt = $pdo->prepare($checkSql);
-                $checkStmt->execute($checkParams);
-
-                if ($checkStmt->fetch() === false) {
-                    return $res->setStatusCode(404)->withJson([
-                        'error' => "Resource '{$table}' with id '{$params->id}' not found",
-                    ]);
-                }
-            }
+            $condition = $policyConditions[$op->value];
+            $resource->allow($op, fn(array $ctx) => $condition);
         }
 
         $api  = (new Api($pdo))->register($resource);

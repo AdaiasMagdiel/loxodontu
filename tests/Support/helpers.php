@@ -85,7 +85,7 @@ function createApiKey(string $token, string $projectId, array $permissions, ?str
     return json($response);
 }
 
-/** @param array{name?: string, role?: ?string, operation: string, conditions?: array, enabled?: bool} $payload */
+/** @param array{name?: string, operation: string, expression: string, enabled?: bool} $payload */
 function createRlsPolicy(string $token, string $projectId, int $tableId, array $payload): array
 {
     $payload['name'] ??= uniqueSlug('policy');
@@ -155,7 +155,7 @@ function createBucket(string $token, string $projectId, ?string $name = null, bo
     return json($response);
 }
 
-/** @param array{name?: string, role?: ?string, operation: string, conditions?: array, enabled?: bool} $payload */
+/** @param array{name?: string, operation: string, expression: string, enabled?: bool} $payload */
 function createStoragePolicy(string $token, string $projectId, int $bucketId, array $payload): array
 {
     $payload['name'] ??= uniqueSlug('storage-policy');

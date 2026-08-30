@@ -146,7 +146,7 @@ test('a REST request without a matching permission is forbidden', function () {
     $owner = registerPlatformUser();
     $project = createProject($owner['token']);
     $table = createTable($owner['token'], $project['id'], 'posts', [['name' => 'title', 'type' => 'text']]);
-    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'conditions' => []]);
+    createRlsPolicy($owner['token'], $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => '1=1']);
     $key = createApiKey($owner['token'], $project['id'], ['select']); // no insert
 
     $response = api()->post("/api/v1/{$project['id']}/rest/posts", [

@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request as ErlRequest;
 use AdaiasMagdiel\Erlenmeyer\Response as ErlResponse;
 use AdaiasMagdiel\PdoRestify\QueryBuilder;
+use AdaiasMagdiel\PdoRestify\RawCondition;
 use App\Auth\EndUserAuth;
 use App\Database;
 use App\Pagination;
@@ -64,20 +65,17 @@ class Storage
             array $bucket,
             array $policyConditions,
         ) use ($req, $res): ErlResponse {
-            $conditions = $policyConditions['select'];
-            if ($conditions === null) {
-                return $res->setStatusCode(403)->withJson(['error' => 'Forbidden']);
-            }
-            $conditions['bucket_id'] = $bucket['id'];
+            $condition = $policyConditions['select'];
+            $filters   = [['bucket_id', 'eq', (string) $bucket['id']]];
 
             ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
 
-            [$countSql, $countParams] = QueryBuilder::count('project_storage_objects', [], $conditions);
+            [$countSql, $countParams] = QueryBuilder::count('project_storage_objects', $filters, $condition);
             $countStmt = $pdo->prepare($countSql);
             $countStmt->execute($countParams);
             $total = (int) $countStmt->fetchColumn();
 
-            [$sql, $sqlParams] = QueryBuilder::select('project_storage_objects', self::OBJECT_COLUMNS, [], $conditions, [['created_at', 'desc']], $limit, $offset);
+            [$sql, $sqlParams] = QueryBuilder::select('project_storage_objects', self::OBJECT_COLUMNS, $filters, $condition, [['created_at', 'desc']], $limit, $offset);
             $stmt = $pdo->prepare($sql);
             $stmt->execute($sqlParams);
 
@@ -96,12 +94,8 @@ class Storage
             PDO $pdo,
             array $bucket,
             array $policyConditions,
+            ?array $auth,
         ) use ($req, $res, $params): ErlResponse {
-            $conditions = $policyConditions['insert'];
-            if ($conditions === null) {
-                return $res->setStatusCode(403)->withJson(['error' => 'Forbidden']);
-            }
-
             $file = $req->getFile('file');
             if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 return $res->setStatusCode(422)->withJson(['error' => 'file is required']);
@@ -113,27 +107,34 @@ class Storage
                 return $res->setStatusCode(422)->withJson(['error' => 'path is required']);
             }
 
-            // Only scalar conditions (e.g. { "owner_id": "$auth.id" }, already resolved by
-            // PolicyEngine) make sense to force onto an insert; operator conditions like
-            // { "op": "gt", ... } are for scoping reads/writes, not for forcing a value.
-            $forced = array_filter($conditions, fn(mixed $v): bool => !is_array($v));
-
-            $data = array_merge([
-                'bucket_id' => $bucket['id'],
-                'path'      => $path,
-                'size'      => (int) $file['size'],
-                'mime_type' => $file['type'] ?? null,
-            ], $forced);
-
             $stmt = $pdo->prepare('SELECT id FROM project_storage_objects WHERE bucket_id = ? AND path = ? LIMIT 1');
             $stmt->execute([$bucket['id'], $path]);
             if ($stmt->fetch()) {
                 return $res->setStatusCode(409)->withJson(['error' => 'An object with this path already exists in the bucket']);
             }
 
+            $data = [
+                'bucket_id' => $bucket['id'],
+                'path'      => $path,
+                'owner_id'  => $auth['id'] ?? null, // an uploaded object's owner is always the uploader, never client-chosen
+                'size'      => (int) $file['size'],
+                'mime_type' => $file['type'] ?? null,
+            ];
+
             [$sql, $sqlParams] = QueryBuilder::insert('project_storage_objects', $data);
             $pdo->prepare($sql)->execute($sqlParams);
             $objectId = (int) $pdo->lastInsertId();
+
+            // WITH CHECK: the insert policy, if any, is re-evaluated against the
+            // row it just wrote — a violation deletes it before the file ever
+            // touches disk, and the request is rejected outright rather than
+            // having any of its values silently coerced.
+            $condition = $policyConditions['insert'];
+            if ($condition !== null && !self::objectSatisfies($pdo, (int) $bucket['id'], $objectId, $condition)) {
+                $pdo->prepare('DELETE FROM project_storage_objects WHERE id = ?')->execute([$objectId]);
+
+                return $res->setStatusCode(403)->withJson(['error' => "Upload violates the bucket's policy"]);
+            }
 
             LocalDisk::put(self::projectIdFromParams($pdo, $params), (int) $bucket['id'], $objectId, $file['tmp_name']);
 
@@ -168,7 +169,8 @@ class Storage
             array $bucket,
             array $policyConditions,
         ) use ($req, $res, $params): ErlResponse {
-            $object = self::findScopedObject($pdo, (int) $bucket['id'], $params->object_id, $policyConditions['update']);
+            $condition = $policyConditions['update'];
+            $object    = self::findScopedObject($pdo, (int) $bucket['id'], $params->object_id, $condition);
             if ($object === false) {
                 return $res->setStatusCode(404)->withJson(['error' => 'Resource not found']);
             }
@@ -185,7 +187,26 @@ class Storage
                 return $res->setStatusCode(409)->withJson(['error' => 'An object with this path already exists in the bucket']);
             }
 
+            $ownsTransaction = !$pdo->inTransaction();
+            if ($ownsTransaction) {
+                $pdo->beginTransaction();
+            }
+
             $pdo->prepare('UPDATE project_storage_objects SET path = ? WHERE id = ?')->execute([$path, $object['id']]);
+
+            // WITH CHECK, defaulting to the same expression as the USING above
+            // (Postgres's own default when a separate check isn't given).
+            if ($condition !== null && !self::objectSatisfies($pdo, (int) $bucket['id'], (int) $object['id'], $condition)) {
+                if ($ownsTransaction) {
+                    $pdo->rollBack();
+                }
+
+                return $res->setStatusCode(403)->withJson(['error' => "Update violates the bucket's policy"]);
+            }
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
 
             return $res->withJson(self::findObject($pdo, (int) $bucket['id'], (string) $object['id']));
         });
@@ -214,7 +235,8 @@ class Storage
     /**
      * Shared auth/RLS gate: validates the API key + `storage:{operation}` permission,
      * resolves the bucket and the caller's end-user identity, merges the bucket's
-     * storage policies for $operation, then hands off to $handler.
+     * storage policies for $operation, then hands off to $handler(pdo, bucket,
+     * policyConditions, auth).
      */
     private static function withGatedBucket(ErlRequest $req, ErlResponse $res, stdClass $params, string $operation, callable $handler): ErlResponse
     {
@@ -256,7 +278,7 @@ class Storage
         $auth = EndUserAuth::resolve($pdo, $req, $projectId);
 
         $stmt = $pdo->prepare(
-            'SELECT role, operation, expression FROM project_storage_policies
+            'SELECT operation, expression FROM project_storage_policies
              WHERE bucket_id = ? AND enabled = 1'
         );
         $stmt->execute([$bucket['id']]);
@@ -264,24 +286,31 @@ class Storage
 
         $policyConditions = PolicyEngine::resolve($policies, $auth);
 
-        return $handler($pdo, $bucket, $policyConditions);
+        return $handler($pdo, $bucket, $policyConditions, $auth);
     }
 
     /** @return array{id: int, path: string, ...}|false */
-    private static function findScopedObject(PDO $pdo, int $bucketId, mixed $objectId, ?array $conditions): array|false
+    private static function findScopedObject(PDO $pdo, int $bucketId, mixed $objectId, ?RawCondition $condition): array|false
     {
-        if ($conditions === null) {
-            return false;
-        }
+        $filters = [['bucket_id', 'eq', (string) $bucketId], ['id', 'eq', (string) $objectId]];
 
-        $conditions['bucket_id'] = $bucketId;
-        $conditions['id']        = $objectId;
-
-        [$sql, $params] = QueryBuilder::select('project_storage_objects', self::OBJECT_COLUMNS, [], $conditions, null, 1, 0);
+        [$sql, $params] = QueryBuilder::select('project_storage_objects', self::OBJECT_COLUMNS, $filters, $condition, null, 1, 0);
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
 
         return $stmt->fetch();
+    }
+
+    /** Evaluates $condition against a single object — the WITH CHECK re-validation for insert/update. */
+    private static function objectSatisfies(PDO $pdo, int $bucketId, int $objectId, RawCondition $condition): bool
+    {
+        $filters = [['bucket_id', 'eq', (string) $bucketId], ['id', 'eq', (string) $objectId]];
+
+        [$sql, $params] = QueryBuilder::select('project_storage_objects', ['id'], $filters, $condition, null, 1, 0);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetch() !== false;
     }
 
     private static function streamObject(ErlResponse $res, int $projectId, array $bucket, array $object): ErlResponse

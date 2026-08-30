@@ -7,7 +7,7 @@ deadline, just an honest picture of what comes next.
 
 - **Management API** — auth (register/login/logout), projects, tables, API keys, and RLS policies are implemented.
 - **REST passthrough** — per-project REST API via `pdo-restify`, with token-based auth and permission scopes (select/insert/update/delete).
-- **RLS (Row-Level Security)** — column-value conditions per operation per table, managed via the API and enforced transparently at the REST layer. Policies can be scoped to an end-user role and reference the caller via `$auth.id` / `$auth.email` / `$auth.role` placeholders (e.g. "a manager can only update their own rows; an admin can do anything").
+- **RLS (Row-Level Security)** — policies are raw SQL boolean expressions per operation per table (real `WHERE`/`WITH CHECK` power — `OR`, `IN (...)`, column-to-column comparisons), managed via the API and enforced transparently at the REST layer via `pdo-restify`'s `RawCondition`. Multiple policies for the same operation are OR'd together; expressions reference the caller via `$auth.id` / `$auth.email` / `$auth.role` placeholders (e.g. "a manager can only update their own rows; an admin can do anything").
 - **Project-level auth** — a project's own end users can register/login/logout (separate from platform users), authenticated via `X-User-Token` on REST passthrough requests. Roles are assigned by the project owner and feed RLS policies.
 - **Schema alterations** — tables and columns can be changed after creation: rename a table, add a column, rename a column, change a column's type/nullability/default. Column removal is destructive and requires `?confirm=true`.
 - **Edge functions** — project-scoped PHP functions exposed over HTTP and callable from cron jobs.

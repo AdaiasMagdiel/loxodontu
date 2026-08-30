@@ -3,7 +3,8 @@
 /**
  * End-to-end coverage of the Supabase-style RLS scenario this feature was built for:
  *   - everyone can read posts (public SELECT)
- *   - only "manager"s can insert, and created_by is forced to their own id
+ *   - only "manager"s can insert, and must submit their own id as created_by
+ *     (a mismatched value is rejected outright — WITH CHECK, not auto-forced)
  *   - a "manager" can update/delete only their own rows
  *   - an "admin" can do anything to any row
  *   - anyone without a matching role is denied outright
@@ -13,17 +14,17 @@ function rlsBlogFixture(): array
     [$ownerToken, $project, $table] = postsTableForRls();
     $key = createApiKey($ownerToken, $project['id'], ['select', 'insert', 'update', 'delete']);
 
-    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'conditions' => []]);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'expression' => '1=1']);
     createRlsPolicy($ownerToken, $project['id'], $table['id'], [
-        'operation' => 'INSERT', 'role' => 'manager', 'conditions' => ['created_by' => '$auth.id'],
+        'operation' => 'INSERT', 'expression' => "\$auth.role = 'manager' AND created_by = \$auth.id",
     ]);
     createRlsPolicy($ownerToken, $project['id'], $table['id'], [
-        'operation' => 'UPDATE', 'role' => 'manager', 'conditions' => ['created_by' => '$auth.id'],
+        'operation' => 'UPDATE', 'expression' => "\$auth.role = 'manager' AND created_by = \$auth.id",
     ]);
     createRlsPolicy($ownerToken, $project['id'], $table['id'], [
-        'operation' => 'DELETE', 'role' => 'manager', 'conditions' => ['created_by' => '$auth.id'],
+        'operation' => 'DELETE', 'expression' => "\$auth.role = 'manager' AND created_by = \$auth.id",
     ]);
-    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'ALL', 'role' => 'admin', 'conditions' => []]);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'ALL', 'expression' => "\$auth.role = 'admin'"]);
 
     $plainUser = registerEndUser($project['id']);
 
@@ -57,7 +58,7 @@ function restRequest(string $method, array $fx, string $path, ?string $userToken
 test('a plain end user (no role) cannot insert', function () {
     $fx = rlsBlogFixture();
 
-    $response = restRequest('POST', $fx, '', $fx['plainUser']['token'], ['title' => 'nope']);
+    $response = restRequest('POST', $fx, '', $fx['plainUser']['token'], ['title' => 'nope', 'created_by' => $fx['plainUser']['user']['id']]);
 
     expect($response->getStatusCode())->toBe(403);
 });
@@ -70,21 +71,35 @@ test('an anonymous request (no X-User-Token) cannot insert', function () {
     expect($response->getStatusCode())->toBe(403);
 });
 
-test('a manager can insert, and created_by is forced to their own id regardless of body', function () {
+test('a manager can insert when created_by matches their own id', function () {
     $fx = rlsBlogFixture();
 
     $response = restRequest('POST', $fx, '', $fx['managerA']['token'], [
         'title' => 'hello',
-        'created_by' => 999999, // must be ignored/overridden
+        'created_by' => $fx['managerA']['user']['id'],
     ]);
 
     expect($response->getStatusCode())->toBe(200);
     expect(json($response)['created_by'])->toBe($fx['managerA']['user']['id']);
 });
 
+test('a manager is rejected (and the row rolled back) when created_by does not match their own id', function () {
+    $fx = rlsBlogFixture();
+
+    $response = restRequest('POST', $fx, '', $fx['managerA']['token'], [
+        'title' => 'hijack attempt',
+        'created_by' => $fx['managerB']['user']['id'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(403);
+
+    $count = json(restRequest('GET', $fx, ''));
+    expect($count)->toHaveCount(0);
+});
+
 test('everyone, including anonymous callers, can read posts', function () {
     $fx = rlsBlogFixture();
-    restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'public post']);
+    restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'public post', 'created_by' => $fx['managerA']['user']['id']]);
 
     $asAnon = restRequest('GET', $fx, '');
     $asPlainUser = restRequest('GET', $fx, '', $fx['plainUser']['token']);
@@ -96,7 +111,7 @@ test('everyone, including anonymous callers, can read posts', function () {
 
 test('a manager cannot update another manager\'s post', function () {
     $fx = rlsBlogFixture();
-    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'original']));
+    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'original', 'created_by' => $fx['managerA']['user']['id']]));
 
     $response = restRequest('PATCH', $fx, "/{$post['id']}", $fx['managerB']['token'], ['title' => 'hijacked']);
 
@@ -108,7 +123,7 @@ test('a manager cannot update another manager\'s post', function () {
 
 test('a manager cannot delete another manager\'s post', function () {
     $fx = rlsBlogFixture();
-    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'original']));
+    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'original', 'created_by' => $fx['managerA']['user']['id']]));
 
     $response = restRequest('DELETE', $fx, "/{$post['id']}", $fx['managerB']['token']);
 
@@ -118,7 +133,7 @@ test('a manager cannot delete another manager\'s post', function () {
 
 test('a manager can update and delete their own post', function () {
     $fx = rlsBlogFixture();
-    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'mine']));
+    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'mine', 'created_by' => $fx['managerA']['user']['id']]));
 
     $update = restRequest('PATCH', $fx, "/{$post['id']}", $fx['managerA']['token'], ['title' => 'mine, edited']);
     expect($update->getStatusCode())->toBe(200);
@@ -131,7 +146,7 @@ test('a manager can update and delete their own post', function () {
 
 test('an admin can update and delete anyone\'s post', function () {
     $fx = rlsBlogFixture();
-    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'someone else\'s']));
+    $post = json(restRequest('POST', $fx, '', $fx['managerA']['token'], ['title' => 'someone else\'s', 'created_by' => $fx['managerA']['user']['id']]));
 
     $update = restRequest('PATCH', $fx, "/{$post['id']}", $fx['admin']['token'], ['title' => 'edited by admin']);
     expect($update->getStatusCode())->toBe(200);
@@ -140,21 +155,18 @@ test('an admin can update and delete anyone\'s post', function () {
     expect($delete->getStatusCode())->toBe(204);
 });
 
-test('operator-style conditions resolve $auth placeholders just like scalar ones', function () {
+test('a raw expression can combine an equality with IS NOT NULL', function () {
     [$ownerToken, $project, $table] = postsTableForRls();
     $key = createApiKey($ownerToken, $project['id'], ['select', 'insert', 'update']);
     $fx  = ['project' => $project, 'key' => $key];
 
-    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'conditions' => []]);
+    createRlsPolicy($ownerToken, $project['id'], $table['id'], ['operation' => 'SELECT', 'expression' => '1=1']);
     createRlsPolicy($ownerToken, $project['id'], $table['id'], [
-        'operation' => 'INSERT', 'role' => 'manager', 'conditions' => ['created_by' => '$auth.id'],
+        'operation' => 'INSERT', 'expression' => "\$auth.role = 'manager' AND created_by = \$auth.id",
     ]);
     createRlsPolicy($ownerToken, $project['id'], $table['id'], [
-        'operation' => 'UPDATE', 'role' => 'manager',
-        'conditions' => [
-            'created_by' => ['op' => 'eq', 'value' => '$auth.id'],
-            'title'      => ['op' => 'is_not_null'],
-        ],
+        'operation' => 'UPDATE',
+        'expression' => "\$auth.role = 'manager' AND created_by = \$auth.id AND title IS NOT NULL",
     ]);
 
     $managerA = registerEndUser($project['id']);
@@ -162,7 +174,7 @@ test('operator-style conditions resolve $auth placeholders just like scalar ones
     $managerB = registerEndUser($project['id']);
     setEndUserRole($ownerToken, $project['id'], $managerB['user']['id'], 'manager');
 
-    $post = json(restRequest('POST', $fx, '', $managerA['token'], ['title' => 'original']));
+    $post = json(restRequest('POST', $fx, '', $managerA['token'], ['title' => 'original', 'created_by' => $managerA['user']['id']]));
 
     $ownUpdate = restRequest('PATCH', $fx, "/{$post['id']}", $managerA['token'], ['title' => 'edited']);
     expect($ownUpdate->getStatusCode())->toBe(200);

@@ -10,12 +10,7 @@ use stdClass;
 
 class StoragePolicies
 {
-    private const VALID_OPERATIONS   = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
-    private const VALID_PLACEHOLDERS = ['$auth.id', '$auth.email', '$auth.role'];
-    private const VALID_OPS          = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'];
-
-    /** Fixed columns of `project_storage_objects` — not user-defined, unlike table columns. */
-    private const OBJECT_COLUMNS = ['id', 'bucket_id', 'path', 'owner_id', 'size', 'mime_type', 'created_at', 'updated_at'];
+    private const VALID_OPERATIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
 
     public static function index(Request $req, Response $res, stdClass $params): Response
     {
@@ -33,15 +28,14 @@ class StoragePolicies
         $total = (int) $countStmt->fetchColumn();
 
         $stmt = $pdo->prepare(
-            "SELECT id, name, role, operation, expression, enabled, created_at, updated_at
+            "SELECT id, name, operation, expression, enabled, created_at, updated_at
              FROM project_storage_policies WHERE bucket_id = ? ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}"
         );
         $stmt->execute([$bucket['id']]);
         $policies = $stmt->fetchAll();
 
         foreach ($policies as &$policy) {
-            $policy['expression'] = json_decode($policy['expression'], true) ?? [];
-            $policy['enabled']    = (bool) $policy['enabled'];
+            $policy['enabled'] = (bool) $policy['enabled'];
         }
         unset($policy);
 
@@ -62,11 +56,10 @@ class StoragePolicies
             return $res->setStatusCode(404)->withJson(['error' => 'Bucket not found']);
         }
 
-        $name      = trim($body['name'] ?? '');
-        $operation = strtoupper(trim($body['operation'] ?? ''));
-        $condition = $body['conditions'] ?? [];
-        $role      = array_key_exists('role', $body) ? $body['role'] : null;
-        $enabled   = array_key_exists('enabled', $body) ? (bool) $body['enabled'] : true;
+        $name       = trim($body['name'] ?? '');
+        $operation  = strtoupper(trim($body['operation'] ?? ''));
+        $expression = trim($body['expression'] ?? '');
+        $enabled    = array_key_exists('enabled', $body) ? (bool) $body['enabled'] : true;
 
         if ($name === '') {
             return $res->setStatusCode(422)->withJson(['error' => 'name is required']);
@@ -78,62 +71,22 @@ class StoragePolicies
             ]);
         }
 
-        if ($role !== null && (!is_string($role) || !preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $role))) {
-            return $res->setStatusCode(422)->withJson(['error' => 'role must be null or an alphanumeric string (max 64 chars)']);
-        }
-
-        if (!is_array($condition)) {
-            return $res->setStatusCode(422)->withJson(['error' => 'conditions must be an object of column => value']);
-        }
-
-        foreach ($condition as $column => $value) {
-            if (!in_array($column, self::OBJECT_COLUMNS, true)) {
-                return $res->setStatusCode(422)->withJson(['error' => "unknown column in conditions: {$column}"]);
-            }
-            if (is_array($value)) {
-                $op = $value['op'] ?? null;
-                if (!is_string($op) || !in_array($op, self::VALID_OPS, true)) {
-                    return $res->setStatusCode(422)->withJson([
-                        'error' => "conditions.{$column}.op must be one of: " . implode(', ', self::VALID_OPS),
-                    ]);
-                }
-                $noValueOps = ['is_null', 'is_not_null'];
-                if (!in_array($op, $noValueOps, true)) {
-                    if (!array_key_exists('value', $value)) {
-                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value is required for op '{$op}'"]);
-                    }
-                    $val = $value['value'];
-                    if (is_string($val) && str_starts_with($val, '$auth.') && !in_array($val, self::VALID_PLACEHOLDERS, true)) {
-                        return $res->setStatusCode(422)->withJson([
-                            'error' => "invalid placeholder '{$val}' for conditions.{$column}.value; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
-                        ]);
-                    }
-                    if (!is_scalar($val) && $val !== null) {
-                        return $res->setStatusCode(422)->withJson(['error' => "conditions.{$column}.value must be a scalar or placeholder"]);
-                    }
-                }
-            } else {
-                if (is_string($value) && str_starts_with($value, '$auth.') && !in_array($value, self::VALID_PLACEHOLDERS, true)) {
-                    return $res->setStatusCode(422)->withJson([
-                        'error' => "invalid placeholder '{$value}' for conditions.{$column}; use one of: " . implode(', ', self::VALID_PLACEHOLDERS),
-                    ]);
-                }
-            }
+        if ($error = RlsPolicies::validateExpression($expression)) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
         }
 
         $pdo->prepare(
-            'INSERT INTO project_storage_policies (bucket_id, name, role, operation, expression, enabled)
-             VALUES (?, ?, ?, ?, ?, ?)'
-        )->execute([$bucket['id'], $name, $role, $operation, json_encode($condition), (int) $enabled]);
+            'INSERT INTO project_storage_policies (bucket_id, name, operation, expression, enabled)
+             VALUES (?, ?, ?, ?, ?)'
+        )->execute([$bucket['id'], $name, $operation, $expression, (int) $enabled]);
 
         $id = (int) $pdo->lastInsertId();
 
         return $res->setStatusCode(201)->withJson([
             'id'         => $id,
             'name'       => $name,
-            'role'       => $role,
             'operation'  => $operation,
-            'conditions' => $condition,
+            'expression' => $expression,
             'enabled'    => $enabled,
         ]);
     }
