@@ -95,4 +95,12 @@ class Dashboard
             'projectId' => $params->project_id,
         ]);
     }
+
+    public static function projectAuth(Request $req, Response $res, stdClass $params): Response
+    {
+        return $res->withTemplate(t('dashboard/projects/auth'), [
+            'activeNav' => 'auth',
+            'projectId' => $params->project_id,
+        ]);
+    }
 }

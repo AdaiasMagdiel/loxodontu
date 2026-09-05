@@ -17,4 +17,5 @@ test('renders public and dashboard pages', function (string $path, string $needl
     ['/dashboard/projects/123/functions', 'PROJECT_ID = "123"'],
     ['/dashboard/projects/123/cron-jobs', 'PROJECT_ID = "123"'],
     ['/dashboard/projects/123/end-users', 'PROJECT_ID = "123"'],
+    ['/dashboard/projects/123/auth', 'PROJECT_ID = "123"'],
 ]);

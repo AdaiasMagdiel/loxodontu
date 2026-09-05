@@ -10,6 +10,7 @@ $tabs = [
     ['functions', '/functions', 'Functions'],
     ['cron-jobs', '/cron-jobs', 'Cron Jobs'],
     ['end-users', '/end-users', 'End Users'],
+    ['auth', '/auth', 'Auth'],
 ];
 ?>
 <div class="flex gap-2 mb-6">

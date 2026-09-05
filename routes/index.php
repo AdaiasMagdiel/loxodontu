@@ -35,6 +35,7 @@ $app->get('/dashboard/projects/[project_id]/functions', [Dashboard::class, 'proj
 $app->get('/dashboard/projects/[project_id]/cron-jobs', [Dashboard::class, 'projectCronJobs']);
 $app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
 $app->get('/dashboard/projects/[project_id]/storage', [Dashboard::class, 'projectStorage']);
+$app->get('/dashboard/projects/[project_id]/auth', [Dashboard::class, 'projectAuth']);
 
 $app->group('/api', function () use ($app) {
     $app->get('/health', function ($req, $res) {
