@@ -4,6 +4,8 @@ use App\Controllers\Auth;
 use App\Controllers\CronJobs;
 use App\Controllers\Dashboard;
 use App\Controllers\EdgeFunctions;
+use App\Controllers\EmailConfig;
+use App\Controllers\EmailTemplates;
 use App\Controllers\EndUsers;
 use App\Controllers\Keys;
 use App\Controllers\Projects;
@@ -109,6 +111,17 @@ $app->group('/api', function () use ($app) {
         $app->post('/projects/[project_id]/storage/buckets/[bucket_id]/objects', [StorageObjects::class, 'store'], [[PlatformAuth::class, 'handle']]);
         $app->get('/projects/[project_id]/storage/buckets/[bucket_id]/objects/[object_id]/download', [StorageObjects::class, 'download'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/storage/buckets/[bucket_id]/objects/[object_id]', [StorageObjects::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+
+        // Email provider config & templates — management, by the platform owner
+        $app->get('/projects/[project_id]/auth/email-config', [EmailConfig::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->put('/projects/[project_id]/auth/email-config', [EmailConfig::class, 'update'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/auth/email-config/test', [EmailConfig::class, 'sendTest'], [[PlatformAuth::class, 'handle']]);
+
+        $app->get('/projects/[project_id]/auth/templates', [EmailTemplates::class, 'index'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/auth/templates/[key]', [EmailTemplates::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->put('/projects/[project_id]/auth/templates/[key]', [EmailTemplates::class, 'update'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/projects/[project_id]/auth/templates/[key]', [EmailTemplates::class, 'resetToDefault'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/auth/templates/preview', [EmailTemplates::class, 'preview'], [[PlatformAuth::class, 'handle']]);
 
         // End users (a project's own app users) — management, by the platform owner
         $app->get('/projects/[project_id]/end-users', [EndUsers::class, 'index'], [[PlatformAuth::class, 'handle']]);
