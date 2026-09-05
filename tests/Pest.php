@@ -12,6 +12,11 @@ $_ENV['DB_MODE'] = 'testing';
 putenv('ENV=testing');
 $_ENV['ENV'] = 'testing';
 
+// Deterministic key so Crypto-backed tests (SMTP/API-key encryption) don't
+// depend on whatever APP_KEY (if any) is set in the developer's own .env.
+putenv('APP_KEY=' . base64_encode(str_repeat('t', 32)));
+$_ENV['APP_KEY'] = base64_encode(str_repeat('t', 32));
+
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/Support/helpers.php';
 
