@@ -112,6 +112,56 @@ function registerEndUser(string $projectId, ?string $email = null, string $passw
     return json($response);
 }
 
+/**
+ * Reads back the most recent message TestMailDriver "sent" to $to (see
+ * app/Mail/TestMailDriver.php) — used to pull the token out of a magic
+ * link / password reset / verification / email-change link in tests,
+ * since no real inbox exists in the test environment.
+ *
+ * @return array{to: string, subject: string, body: string, sent_at: string}
+ */
+function lastSentMail(string $to): array
+{
+    $path = ROOT_DIR . '/storage/mail.log';
+    expect(file_exists($path))->toBeTrue("No mail was ever sent (storage/mail.log doesn't exist).");
+
+    $lines = array_filter(explode("\n", file_get_contents($path)));
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $mail = json_decode($lines[$i], true);
+        if ($mail['to'] === $to) {
+            return $mail;
+        }
+    }
+
+    throw new RuntimeException("No mail was ever sent to {$to}.");
+}
+
+/**
+ * Toggles a project's require_email_confirmation flag, upserting a bare
+ * project_email_configs row if none exists yet (provider/from_address are
+ * irrelevant here since TestMailDriver never actually needs them).
+ */
+function setRequireEmailConfirmation(string $projectId, bool $required): void
+{
+    $pdo = App\Database::getConn('default');
+    $internalId = projectInternalId($projectId);
+
+    $pdo->prepare(
+        'INSERT INTO project_email_configs (project_id, from_address, require_email_confirmation)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE require_email_confirmation = VALUES(require_email_confirmation)'
+    )->execute([$internalId, 'noreply@example.test', (int) $required]);
+}
+
+/** Extracts the `token` query parameter from a link embedded in an email body. */
+function extractTokenFromMail(array $mail): string
+{
+    preg_match('/[?&]token=([^"&<\s]+)/', $mail['body'], $matches);
+    expect($matches[1] ?? null)->not->toBeNull("No token= link found in the email body: {$mail['body']}");
+
+    return $matches[1];
+}
+
 function setEndUserRole(string $platformToken, string $projectId, int $endUserId, ?string $role): array
 {
     $response = api()->patch("/api/v1/projects/{$projectId}/end-users/{$endUserId}", [

@@ -120,6 +120,16 @@ $app->group('/api', function () use ($app) {
         $app->post('/[project_id]/auth/login', [EndUsers::class, 'login']);
         $app->post('/[project_id]/auth/logout', [EndUsers::class, 'logout']);
 
+        // End users — magic link, password reset, email verification, email change
+        $app->post('/[project_id]/auth/magic-link', [EndUsers::class, 'requestMagicLink']);
+        $app->post('/[project_id]/auth/magic-link/consume', [EndUsers::class, 'consumeMagicLink']);
+        $app->post('/[project_id]/auth/password/forgot', [EndUsers::class, 'requestPasswordReset']);
+        $app->post('/[project_id]/auth/password/reset', [EndUsers::class, 'resetPassword']);
+        $app->post('/[project_id]/auth/verify/resend', [EndUsers::class, 'resendVerification']);
+        $app->post('/[project_id]/auth/verify/confirm', [EndUsers::class, 'verifyEmail']);
+        $app->post('/[project_id]/auth/email-change/request', [EndUsers::class, 'requestEmailChange']);
+        $app->post('/[project_id]/auth/email-change/confirm', [EndUsers::class, 'confirmEmailChange']);
+
         // REST passthrough
         $app->any('/[project_id]/rest/[table]', [Rest::class, 'dispatch']);
         $app->any('/[project_id]/rest/[table]/[id]', [Rest::class, 'dispatch']);
