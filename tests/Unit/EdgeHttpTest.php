@@ -98,8 +98,18 @@ namespace {
     test('edge http helper accepts public http and https urls', function () {
         $method = new ReflectionMethod(Http::class, 'assertAllowedUrl');
 
-        expect($method->invoke(null, 'http://93.184.216.34'))->toBeNull();
-        expect($method->invoke(null, 'https://93.184.216.34'))->toBeNull();
+        expect($method->invoke(null, 'http://93.184.216.34'))->toBe('93.184.216.34');
+        expect($method->invoke(null, 'https://93.184.216.34'))->toBe('93.184.216.34');
+    });
+
+    test('edge http helper rejects hosts resolving only to private ipv6 addresses', function () {
+        expect(fn () => Http::get('http://[fc00::1]'))
+            ->toThrow(RuntimeException::class, 'Private and reserved network targets are not allowed.');
+    });
+
+    test('edge http helper rejects ipv6 link-local targets', function () {
+        expect(fn () => Http::get('http://[fe80::1]'))
+            ->toThrow(RuntimeException::class, 'Private and reserved network targets are not allowed.');
     });
 
     test('edge http helper performs get requests through curl', function () {

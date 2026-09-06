@@ -16,6 +16,16 @@ use RuntimeException;
  */
 class Db
 {
+    /**
+     * Ceiling on how long a single call waits for the parent's response,
+     * independent of (and shorter than) the function's own execution
+     * timeout. Without this, a stuck or dead parent left the sandboxed
+     * child blocked on fgets() until the outer process timeout fired,
+     * turning one bridge hiccup into the least informative failure mode
+     * available.
+     */
+    private const RESPONSE_TIMEOUT_SECONDS = 20;
+
     /** @var resource */
     private $requestPipe;
 
@@ -30,6 +40,8 @@ class Db
         if ($requestPipe === false || $responsePipe === false) {
             throw new RuntimeException('Database bridge is not available in this runtime.');
         }
+
+        stream_set_timeout($responsePipe, self::RESPONSE_TIMEOUT_SECONDS);
 
         $this->requestPipe = $requestPipe;
         $this->responsePipe = $responsePipe;
@@ -57,6 +69,11 @@ class Db
         fflush($this->requestPipe);
 
         $responseLine = fgets($this->responsePipe);
+        if (stream_get_meta_data($this->responsePipe)['timed_out'] ?? false) {
+            throw new RuntimeException(
+                'Database bridge did not respond within ' . self::RESPONSE_TIMEOUT_SECONDS . ' seconds.',
+            );
+        }
         if ($responseLine === false) {
             throw new RuntimeException('Database bridge closed the connection.');
         }

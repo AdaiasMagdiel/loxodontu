@@ -66,9 +66,27 @@ return function (FunctionRequest $request): FunctionResponse {
 - `get()` / `first()` — run a `select`.
 - `insert($data)`, `update($data)`, `delete()` — write operations, gated by that table's RLS
   policies exactly like a REST request from the calling end user would be.
+- `insertMany($rows)`, `updateMany($rows)` — insert or update a list of rows in one call, in a
+  single transaction (if any row fails, none of them are persisted). Each row passed to
+  `updateMany()` must include the table's primary key column.
+- `orWhere($column, $operator, $value)` — adds one leg of a single OR group (every `orWhere()`
+  call on a query joins the same group), itself AND'ed with every `where()` filter and the
+  table's RLS policy: `where('published', 'eq', 'true')->orWhere('status', 'eq', 'draft')
+  ->orWhere('status', 'eq', 'pending')` reads as `published = true AND (status = 'draft' OR
+  status = 'pending')`.
 
 Every call returns a `DbResult` with `ok` (bool), `status` (HTTP-style status code), `body`
 (the row/rows on success, an error payload otherwise), and `error`.
+
+Calling `where()` more than once for the same column adds an additional condition on it rather
+than replacing the previous one, so range queries work as expected:
+`where('age', 'gte', 18)->where('age', 'lte', 65)`. A literal comma inside an `in`/`not_in` value
+is escaped automatically, so `where('tag', 'in', ['a,b', 'c'])` matches a `tag` of exactly `a,b`
+or `c`, not four separate values.
+
+A call can wait up to 20 seconds for the platform's response before it throws — this bounds the
+DB bridge independently of (and below) the function's own `timeout_seconds`, so a stuck bridge
+fails with a clear error instead of hanging the sandbox until the outer timeout fires.
 
 Each function runs with whatever end-user identity was resolved for the invocation — the same
 `$auth` available as `$request->auth`, populated from the `X-User-Token` header when
@@ -142,6 +160,15 @@ return function (FunctionRequest $request): FunctionResponse {
 
 Use `App\Edge\Http` for outbound HTTP calls. Direct filesystem URL wrappers such as
 `file_get_contents('https://example.com')` are disabled inside the sandbox.
+
+Only `http`/`https` URLs are allowed, and both the target host and every address it resolves to
+(IPv4 and IPv6) must be public — private, loopback, link-local, and reserved ranges are rejected.
+The resolved IP is pinned to the connection, so a host that resolves to a different address
+between validation and connection (DNS rebinding) can't be used to slip past that check.
+Redirects are followed up to 5 hops, re-validating and re-pinning each target the same way, so a
+redirect to a private address is rejected exactly like a direct request to one would be; an
+`Authorization` header is dropped across a redirect that changes host. Responses larger than 5 MB
+(per the `Content-Length` header) are aborted rather than buffered into memory.
 
 External invocation requires a project API key with the `function` permission when
 `require_api_key` is enabled:
