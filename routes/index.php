@@ -28,14 +28,22 @@ $app->get('/dashboard', [Dashboard::class, 'home']);
 $app->get('/dashboard/account', [Dashboard::class, 'account']);
 $app->get('/dashboard/projects', [Dashboard::class, 'projects']);
 $app->get('/dashboard/projects/[project_id]', [Dashboard::class, 'projectOverview']);
-$app->get('/dashboard/projects/[project_id]/tables', [Dashboard::class, 'projectTables']);
+$app->get('/dashboard/projects/[project_id]/table-editor', [Dashboard::class, 'projectTableEditor']);
 $app->get('/dashboard/projects/[project_id]/sql', [Dashboard::class, 'projectSql']);
+$app->get('/dashboard/projects/[project_id]/database', [Dashboard::class, 'projectDatabase']);
 $app->get('/dashboard/projects/[project_id]/keys', [Dashboard::class, 'projectKeys']);
 $app->get('/dashboard/projects/[project_id]/functions', [Dashboard::class, 'projectFunctions']);
+$app->get('/dashboard/projects/[project_id]/functions/[function_id]', [Dashboard::class, 'projectFunctionDetail']);
 $app->get('/dashboard/projects/[project_id]/cron-jobs', [Dashboard::class, 'projectCronJobs']);
-$app->get('/dashboard/projects/[project_id]/end-users', [Dashboard::class, 'projectEndUsers']);
+$app->get('/dashboard/projects/[project_id]/cron-jobs/[job_id]', [Dashboard::class, 'projectCronJobDetail']);
 $app->get('/dashboard/projects/[project_id]/storage', [Dashboard::class, 'projectStorage']);
-$app->get('/dashboard/projects/[project_id]/auth', [Dashboard::class, 'projectAuth']);
+$app->get('/dashboard/projects/[project_id]/storage/[bucket_id]', [Dashboard::class, 'projectStorageDetail']);
+$app->get('/dashboard/projects/[project_id]/auth/users', [Dashboard::class, 'projectAuthUsers']);
+$app->get('/dashboard/projects/[project_id]/auth/providers', [Dashboard::class, 'projectAuthProviders']);
+$app->get('/dashboard/projects/[project_id]/auth/templates', [Dashboard::class, 'projectAuthTemplates']);
+$app->get('/dashboard/projects/[project_id]/auth/templates/[key]', [Dashboard::class, 'projectAuthTemplateEditor']);
+$app->get('/dashboard/projects/[project_id]/auth/settings', [Dashboard::class, 'projectAuthSettings']);
+$app->get('/dashboard/projects/[project_id]/settings', [Dashboard::class, 'projectSettings']);
 
 $app->group('/api', function () use ($app) {
     $app->get('/health', function ($req, $res) {
@@ -57,6 +65,7 @@ $app->group('/api', function () use ($app) {
         $app->get('/projects/[project_id]', [Projects::class, 'show'], [[PlatformAuth::class, 'handle']]);
         $app->patch('/projects/[project_id]', [Projects::class, 'update'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]', [Projects::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/stats', [Projects::class, 'stats'], [[PlatformAuth::class, 'handle']]);
 
         // Tables
         $app->get('/projects/[project_id]/tables', [\App\Controllers\Tables::class, 'index'], [[PlatformAuth::class, 'handle']]);
@@ -69,6 +78,12 @@ $app->group('/api', function () use ($app) {
         $app->patch('/projects/[project_id]/tables/[table_id]/columns/[column_id]', [\App\Controllers\Tables::class, 'updateColumn'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/tables/[table_id]/columns/[column_id]', [\App\Controllers\Tables::class, 'destroyColumn'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects/[project_id]/sql', [\App\Controllers\Tables::class, 'runSql'], [[PlatformAuth::class, 'handle']]);
+
+        // Table rows — owner-only browse/edit for the dashboard's Table Editor, bypasses RLS
+        $app->get('/projects/[project_id]/tables/[table_id]/rows', [\App\Controllers\TableRows::class, 'index'], [[PlatformAuth::class, 'handle']]);
+        $app->post('/projects/[project_id]/tables/[table_id]/rows', [\App\Controllers\TableRows::class, 'store'], [[PlatformAuth::class, 'handle']]);
+        $app->patch('/projects/[project_id]/tables/[table_id]/rows/[row_id]', [\App\Controllers\TableRows::class, 'update'], [[PlatformAuth::class, 'handle']]);
+        $app->delete('/projects/[project_id]/tables/[table_id]/rows/[row_id]', [\App\Controllers\TableRows::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
 
         // API Keys
         $app->get('/projects/[project_id]/keys', [Keys::class, 'index'], [[PlatformAuth::class, 'handle']]);
@@ -94,6 +109,7 @@ $app->group('/api', function () use ($app) {
         $app->get('/projects/[project_id]/tables/[table_id]/rls-policies', [RlsPolicies::class, 'index'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects/[project_id]/tables/[table_id]/rls-policies', [RlsPolicies::class, 'store'], [[PlatformAuth::class, 'handle']]);
         $app->delete('/projects/[project_id]/tables/[table_id]/rls-policies/[policy_id]', [RlsPolicies::class, 'destroy'], [[PlatformAuth::class, 'handle']]);
+        $app->get('/projects/[project_id]/rls-policies', [RlsPolicies::class, 'indexForProject'], [[PlatformAuth::class, 'handle']]);
 
         // Storage buckets
         $app->get('/projects/[project_id]/storage/buckets', [StorageBuckets::class, 'index'], [[PlatformAuth::class, 'handle']]);

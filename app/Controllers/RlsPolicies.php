@@ -48,6 +48,49 @@ class RlsPolicies
             ->withJson($policies);
     }
 
+    /** Lists every RLS policy across every table in a project — powers the Database page. */
+    public static function indexForProject(Request $req, Response $res, stdClass $params): Response
+    {
+        $pdo     = Database::getConn('default');
+        $project = self::findOwnedProject($pdo, $params->project_id, $params->user['id']);
+
+        if (!$project) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
+        }
+
+        ['limit' => $limit, 'offset' => $offset] = Pagination::fromQuery($req->getQueryParams());
+
+        $countStmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM project_rls_policies p
+             INNER JOIN project_tables t ON t.id = p.table_id
+             WHERE t.project_id = ?'
+        );
+        $countStmt->execute([$project['id']]);
+        $total = (int) $countStmt->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            "SELECT p.id, p.name, p.operation, p.expression, p.enabled, p.created_at,
+                    t.id AS table_id, t.name AS table_name
+             FROM project_rls_policies p
+             INNER JOIN project_tables t ON t.id = p.table_id
+             WHERE t.project_id = ?
+             ORDER BY p.created_at DESC LIMIT {$limit} OFFSET {$offset}"
+        );
+        $stmt->execute([$project['id']]);
+        $policies = $stmt->fetchAll();
+
+        foreach ($policies as &$policy) {
+            $policy['enabled'] = (bool) $policy['enabled'];
+        }
+        unset($policy);
+
+        return $res
+            ->setHeader('X-Total-Count', (string) $total)
+            ->setHeader('X-Page-Limit', (string) $limit)
+            ->setHeader('X-Page-Offset', (string) $offset)
+            ->withJson($policies);
+    }
+
     public static function store(Request $req, Response $res, stdClass $params): Response
     {
         $body  = $req->getJson(ignoreContentType: true) ?? [];
@@ -155,6 +198,13 @@ class RlsPolicies
              LIMIT 1'
         );
         $stmt->execute([$tableId, $publicProjectId, $userId]);
+        return $stmt->fetch();
+    }
+
+    private static function findOwnedProject(\PDO $pdo, mixed $publicId, int $userId): array|false
+    {
+        $stmt = $pdo->prepare('SELECT id FROM projects WHERE public_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$publicId, $userId]);
         return $stmt->fetch();
     }
 }
