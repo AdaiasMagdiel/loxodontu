@@ -3,59 +3,52 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main>
         <div class="mb-6">
-            <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
-            <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '...' }}</h1>
+            <h1 class="page-title">SQL Editor</h1>
+            <p class="page-subtitle">Run queries directly against your project's tables (logical names, e.g. <span class="font-mono">posts</span>).</p>
         </div>
 
-        <?php include t('dashboard/projects/_tabs'); ?>
-
-        <div class="flex items-center justify-between mb-4">
-            <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">SQL Editor</p>
-            <button class="btn-accent" @click="runSql" :disabled="sqlState.running">{{ sqlState.running ? 'Running' : 'Run SQL' }}</button>
-        </div>
-
-        <div class="rounded-lg overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-            <div class="p-5">
-                <textarea v-model="sqlState.sql" class="input font-mono min-h-[220px]" spellcheck="false" placeholder="insert into posts (title) values ('Hello');&#10;select id, title from posts;" @keydown.ctrl.enter.prevent="runSql"></textarea>
-                <div class="flex items-center justify-between gap-3 mt-2 text-xs" style="color:var(--text-muted);">
-                    <span>Use logical table names like posts. Separate commands by line or semicolon.</span>
-                    <span class="font-mono shrink-0">Ctrl+Enter</span>
+        <div class="card mb-4" style="padding:0;overflow:hidden;">
+            <div class="flex items-center justify-between px-4 py-2" style="border-bottom:1px solid var(--border);background:var(--bg-hover);">
+                <span class="font-mono text-xs" style="color:var(--text-muted);">query.sql</span>
+                <div class="flex gap-2">
+                    <button class="btn-ghost" @click="copyToClipboard(sqlState.sql, $event.currentTarget)">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg> Copy
+                    </button>
+                    <button class="btn-accent" :disabled="sqlState.running" @click="runSql">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg> {{ sqlState.running ? 'Running…' : 'Run' }}
+                    </button>
                 </div>
             </div>
+            <textarea v-model="sqlState.sql" class="input font-mono" style="min-height:12rem;border:none;border-radius:0;resize:vertical;"
+                spellcheck="false" placeholder="select id, title from posts;" @keydown.ctrl.enter.prevent="runSql"></textarea>
         </div>
 
-        <div v-if="sqlState.results.length" class="mt-5 space-y-4">
-            <div v-for="result in sqlState.results" :key="result.index" class="rounded-lg overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-                <div class="px-5 py-3" style="border-bottom:1px solid var(--border);">
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">Command {{ result.index }}</p>
-                        <p class="text-xs font-mono" style="color:var(--text-muted);">
-                            {{ result.operation }} · {{ result.affected_rows }} affected rows · {{ result.duration_ms }}ms
-                            <span v-if="result.truncated"> · first {{ result.row_limit }} rows</span>
-                        </p>
-                    </div>
-                    <div class="mt-2 text-xs font-mono rounded-md px-3 py-2 overflow-x-auto" style="background:var(--bg-hover); color:var(--text-muted);">
-                        {{ result.sql }}
-                    </div>
+        <div v-if="sqlState.error" class="mb-4" style="padding:0.85rem 1rem;border:1px solid var(--danger);border-radius:var(--radius-md);background:var(--danger-dim);color:var(--danger);font-size:0.85rem;">
+            {{ sqlState.error }}
+        </div>
+
+        <div v-if="!sqlState.ranOnce && !sqlState.error" class="empty-state">
+            <p class="empty-state-title">Run a query to see results here</p>
+            <p class="empty-state-body">SELECT, INSERT, UPDATE and DELETE are supported. Separate multiple commands by line or semicolon.</p>
+        </div>
+
+        <div v-for="result in sqlState.results" :key="result.index" class="mb-5">
+            <h2 class="font-head text-sm uppercase tracking-wide mb-2" style="color:var(--text-muted);">
+                Results &middot; {{ result.operation }} &middot; {{ result.affected_rows }} affected row{{ result.affected_rows === 1 ? '' : 's' }} &middot; {{ result.duration_ms }}ms
+                <span v-if="result.truncated">&middot; showing first {{ result.row_limit }} rows</span>
+            </h2>
+
+            <div v-if="result.columns.length === 0" class="text-sm" style="color:var(--text-muted);">
+                Command executed without a result set.
+            </div>
+            <div v-else class="datalist">
+                <div class="datalist-head">
+                    <div v-for="col in result.columns" :key="col" class="datalist-cell font-mono">{{ col }}</div>
                 </div>
-                <div v-if="result.columns.length" class="overflow-x-auto">
-                    <table class="w-full text-xs font-mono">
-                        <thead>
-                            <tr style="color:var(--text-muted); border-bottom:1px solid var(--border);">
-                                <th v-for="col in result.columns" :key="col" class="text-left px-3 py-2">{{ col }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(row, idx) in result.rows" :key="idx" style="border-bottom:1px solid var(--border);">
-                                <td v-for="col in result.columns" :key="col" class="px-3 py-2" style="color:var(--text-main);">{{ row[col] }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-else class="px-5 py-4 text-sm" style="color:var(--text-muted);">
-                    Command executed without a result set.
+                <div v-for="(row, idx) in result.rows" :key="idx" class="datalist-row">
+                    <div v-for="col in result.columns" :key="col" class="datalist-cell font-mono">{{ row[col] === null ? '' : row[col] }}</div>
                 </div>
             </div>
         </div>
@@ -72,43 +65,35 @@ ob_start();
             if (!store.auth) { location.href = '/dashboard'; return {}; }
 
             const PROJECT_ID = <?= json_encode((string) $projectId) ?>;
-            const project = Vue.ref(null);
             const sqlState = Vue.reactive({
-                sql: "select id from posts;",
+                sql: '',
                 results: [],
                 running: false,
+                error: null,
+                ranOnce: false,
             });
-
-            async function loadProject() {
-                try {
-                    const { body } = await apiFetch(`/projects/${PROJECT_ID}`);
-                    project.value = body;
-                } catch (e) {
-                    toast.error(e.message);
-                }
-            }
 
             async function runSql() {
                 if (!sqlState.sql.trim()) { toast.error('SQL is required'); return; }
                 sqlState.running = true;
-                sqlState.results = [];
+                sqlState.error = null;
                 try {
                     const { body } = await apiFetch(`/projects/${PROJECT_ID}/sql`, {
                         method: 'POST',
                         body: JSON.stringify({ sql: sqlState.sql }),
                     });
-                    sqlState.results = body.results || [body];
-                    toast.success(sqlState.results.length === 1 ? 'SQL executed' : 'SQL batch executed');
+                    sqlState.results = body.results || [];
+                    sqlState.ranOnce = true;
+                    toast.success(sqlState.results.length === 1 ? 'Query executed' : `${sqlState.results.length} commands executed`);
                 } catch (e) {
-                    toast.error(e.message);
+                    sqlState.error = e.message;
+                    sqlState.results = [];
                 } finally {
                     sqlState.running = false;
                 }
             }
 
-            loadProject();
-
-            return { project, sqlState, runSql };
+            return { sqlState, runSql, copyToClipboard };
         }
     });
 </script>
@@ -119,7 +104,7 @@ $page = [
     'body'   => $body,
     'script' => $script,
     'info'   => [
-        'title'     => 'SQL Editor - Loxodontu',
+        'title'     => 'SQL Editor — Loxodontu',
         'pageTitle' => 'SQL Editor',
     ],
 ];

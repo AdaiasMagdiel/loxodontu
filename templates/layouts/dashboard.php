@@ -103,7 +103,7 @@ $projectNavItems = [
 
         * { box-sizing: border-box; }
         html, body { background: var(--bg-main); color: var(--text-main); font-family: 'Inter', sans-serif; margin:0; padding:0; -webkit-font-smoothing: antialiased; }
-        .font-head { font-family: 'Oswald', sans-serif; }
+        .font-head, .font-oswald { font-family: 'Oswald', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         a { color: inherit; }
 
@@ -354,7 +354,7 @@ $projectNavItems = [
                 <?php else: ?>
                     <div class="nav-section">
                         <div class="nav-section-label">Project</div>
-                        <?php foreach ($projectNavItems as [$id, $suffix, $label, $icon, $subs]): ?>
+                        <?php foreach ($projectNavItems as $navItem): [$id, $suffix, $label, $icon, $subs] = $navItem + [4 => null]; ?>
                             <a href="/dashboard/projects/<?= e((string) $projectId) ?><?= $suffix ?>" class="nav-item <?= $activeNav === $id ? 'active' : '' ?>" title="<?= e($label) ?>">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $icon ?></svg>
                                 <span class="nav-label"><?= e($label) ?></span>
