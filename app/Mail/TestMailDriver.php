@@ -23,6 +23,11 @@ class TestMailDriver implements MailerInterface
             'sent_at' => date('c'),
         ]) . "\n";
 
+        $dir = dirname($this->logPath);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
         file_put_contents($this->logPath, $line, FILE_APPEND | LOCK_EX);
 
         return true;
