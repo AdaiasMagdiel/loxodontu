@@ -36,6 +36,12 @@ If a project has no email provider configured yet (see
 [Email configuration](./email-auth.md)), these endpoints still succeed and
 issue a token — they just have nothing to send it with.
 
+The endpoints that send email (magic link, password reset, resend
+verification and email change) are rate limited per project: at most 5
+requests per recipient address and 20 per client IP per hour. Every request
+counts, registered address or not, so the limit never reveals whether an
+account exists. Over the limit they respond `429` with a `Retry-After` header.
+
 ## Requiring email confirmation
 
 A project can require end users to confirm their email before they're

@@ -9,6 +9,7 @@ use App\Database;
 use App\Mail\EmailNotConfiguredException;
 use App\Mail\MailerFactory;
 use App\Pagination;
+use App\Security\EmailSendThrottle;
 use App\Security\LoginThrottle;
 use stdClass;
 
@@ -161,6 +162,10 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
         }
 
+        if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
+            return $limited;
+        }
+
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
         if ($user) {
             self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'magic_link', $body['redirect_url'] ?? null, '+15 minutes');
@@ -207,6 +212,10 @@ class EndUsers
         $email = trim($body['email'] ?? '');
         if ($email === '') {
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
+        }
+
+        if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
+            return $limited;
         }
 
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
@@ -264,6 +273,10 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
         }
 
+        if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
+            return $limited;
+        }
+
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
         if ($user && $user['email_verified_at'] === null) {
             self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'email_verification', $body['redirect_url'] ?? null);
@@ -318,6 +331,10 @@ class EndUsers
         $stmt->execute([$project['id'], $newEmail]);
         if ($stmt->fetch()) {
             return $res->setStatusCode(409)->withJson(['error' => 'Email already in use']);
+        }
+
+        if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $newEmail)) {
+            return $limited;
         }
 
         $token = self::issueToken($pdo, $auth['id'], 'email_change', '+30 minutes', $newEmail);
@@ -537,7 +554,28 @@ class EndUsers
         } catch (EmailNotConfiguredException) {
             // No provider configured yet — the flow still succeeds from the
             // caller's point of view (token issued), it just can't be emailed.
+        } catch (\RuntimeException) {
+            // The configured SMTP host/port was refused (e.g. an internal
+            // address). Same as a delivery failure: the public response stays
+            // generic, and the owner sees the reason via "send test email".
         }
+    }
+
+    /**
+     * Applies EmailSendThrottle before an auth email is sent, returning the
+     * 429 response to send back when the limit is reached.
+     */
+    private static function throttleEmail(Request $req, Response $res, \PDO $pdo, int $projectId, string $recipient): ?Response
+    {
+        $retryAfter = (new EmailSendThrottle($pdo, $projectId))->attempt($recipient, $req->getIp());
+
+        if ($retryAfter === null) {
+            return null;
+        }
+
+        return $res->setStatusCode(429)
+            ->setHeader('Retry-After', (string) $retryAfter)
+            ->withJson(['error' => 'Too many email requests. Try again later.']);
     }
 
     /** Builds the link an end user clicks: the developer's own redirect URL plus the raw token. */
