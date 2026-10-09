@@ -14,7 +14,7 @@ test('runs sql using logical table names and rewrites them to the project table 
         'json'    => ['sql' => "insert into posts (title) values ('Hello')"],
     ]);
     expect($insert->getStatusCode())->toBe(200);
-    expect(json($insert)['sql'])->toContain(Tables::physicalName(projectInternalId($project['id']), 'posts'));
+    expect(json($insert)['sql'])->toBe("insert into posts (title) values ('Hello')");
 
     $select = api()->post("/api/v1/projects/{$project['id']}/sql", [
         'headers' => ['Authorization' => "Bearer {$owner['token']}"],
@@ -25,7 +25,25 @@ test('runs sql using logical table names and rewrites them to the project table 
     $body = json($select);
     expect($body['columns'])->toBe(['id', 'title']);
     expect($body['rows'][0]['title'])->toBe('Hello');
-    expect($body['sql'])->toBe('select id, title from `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '`');
+    // The executed statement is echoed back as written — physical table
+    // names are an internal detail and never shown to the user.
+    expect($body['sql'])->toBe('select id, title from posts');
+    expect(json_encode($body))->not->toContain(Tables::physicalName(projectInternalId($project['id']), 'posts'));
+});
+
+test('sql errors refer to tables by their logical name', function () {
+    $owner = registerPlatformUser();
+    $project = createProject($owner['token']);
+    createTable($owner['token'], $project['id'], 'posts', [['name' => 'title', 'type' => 'text']]);
+
+    $response = api()->post("/api/v1/projects/{$project['id']}/sql", [
+        'headers' => ['Authorization' => "Bearer {$owner['token']}"],
+        'json'    => ['sql' => 'select posts.missing_column from posts'],
+    ]);
+
+    expect($response->getStatusCode())->toBe(422);
+    expect(json($response)['error'])->toContain('posts.missing_column');
+    expect(json($response)['error'])->not->toContain(Tables::physicalName(projectInternalId($project['id']), 'posts'));
 });
 
 test('rejects sql that references another project physical table', function () {
@@ -109,7 +127,8 @@ test('rewrites backtick quoted logical table names', function () {
     ]);
 
     expect($response->getStatusCode())->toBe(200);
-    expect(json($response)['sql'])->toBe('select id from `' . Tables::physicalName(projectInternalId($project['id']), 'posts') . '`');
+    expect(json($response)['sql'])->toBe('select id from `posts`');
+    expect(json($response)['columns'])->toBe(['id']);
 });
 
 test('rejects sql comments in the editor', function () {

@@ -647,9 +647,18 @@ class Tables
             return $res->withJson($payload);
         } catch (\Throwable $e) {
             return $res->setStatusCode(422)->withJson([
-                'error' => 'SQL failed: ' . $e->getMessage(),
+                'error' => 'SQL failed: ' . self::logicalTableNames($e->getMessage(), (int) $project['id']),
             ]);
         }
+    }
+
+    /**
+     * Database errors mention physical names (`schema`.`p12_posts`); show the
+     * project's own logical names instead (`posts`).
+     */
+    private static function logicalTableNames(string $message, int $projectId): string
+    {
+        return (string) preg_replace('/(?:`?\w+`?\.)?`?p' . $projectId . '_(\w+)`?/', '$1', $message);
     }
 
     private static function findOwnedProject(\PDO $pdo, mixed $publicId, int $userId): array|false
@@ -806,7 +815,10 @@ class Tables
     }
 
     /**
-     * @param array{sql: string, operation: string} $rewrite
+     * `sql` in the result is the statement as the user wrote it, with logical
+     * table names — the rewritten physical names never leave the server.
+     *
+     * @param array{sql: string, display_sql: string, operation: string} $rewrite
      * @return array{index: int, sql: string, operation: string, columns: string[], rows: array<int, array<string, mixed>>, truncated: bool, row_limit: int, affected_rows: int, duration_ms: int}
      */
     private static function executeSqlStatement(\PDO $pdo, array $rewrite, int $index): array
@@ -834,7 +846,7 @@ class Tables
 
         return [
             'index'         => $index,
-            'sql'           => $rewrite['sql'],
+            'sql'           => $rewrite['display_sql'],
             'operation'     => $rewrite['operation'],
             'columns'       => $columns,
             'rows'          => $rows,
@@ -974,7 +986,7 @@ class Tables
             return ['error' => "Unknown project table: {$ref}"];
         }
 
-        return ['sql' => $rewritten, 'operation' => $operation];
+        return ['sql' => $rewritten, 'display_sql' => $sql, 'operation' => $operation];
     }
 
     private static function trimFinalStatementTerminator(string $sql): string
