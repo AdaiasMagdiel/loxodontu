@@ -379,6 +379,7 @@ class EdgeFunctionRunner
                 $body,
                 $headers,
                 min((int) ($payload['timeout'] ?? 5), $remaining),
+                min(max(0, (int) ($payload['max_redirects'] ?? 0)), SafeHttpClient::MAX_REDIRECTS),
             );
         } catch (\RuntimeException $e) {
             return ['exception' => $e->getMessage()];

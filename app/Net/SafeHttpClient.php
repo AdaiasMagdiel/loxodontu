@@ -15,7 +15,14 @@ class SafeHttpClient
     public const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
     public const MAX_TIMEOUT_SECONDS = 30;
 
+    public const MAX_REDIRECTS = 5;
+
     /**
+     * Redirects are never followed by curl itself. With $maxRedirects > 0
+     * each hop is re-issued through request(), so the target is validated
+     * and pinned again — a redirect to a private address is refused exactly
+     * like a direct request to one.
+     *
      * @param array<string, scalar> $headers
      * @return array{ok: bool, status: int, headers: array<string, string>, body: string, error: string|null}
      * @throws RuntimeException When the URL is not allowed or cURL is unavailable.
@@ -26,6 +33,7 @@ class SafeHttpClient
         ?string $body = null,
         array $headers = [],
         int $timeoutSeconds = 10,
+        int $maxRedirects = 0,
     ): array {
         if (!function_exists('curl_init')) {
             throw new RuntimeException('cURL is not available.');
@@ -91,6 +99,22 @@ class SafeHttpClient
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
 
+        if ($maxRedirects > 0 && in_array($status, [301, 302, 303, 307, 308], true) && isset($responseHeaders['location'])) {
+            $nextUrl = self::resolveLocation($url, $responseHeaders['location']);
+
+            // Credentials are for the original host only.
+            if (strtolower((string) parse_url($nextUrl, PHP_URL_HOST)) !== strtolower((string) parse_url($url, PHP_URL_HOST))) {
+                $headers = array_filter($headers, fn($name) => !in_array(strtolower((string) $name), ['authorization', 'cookie'], true), ARRAY_FILTER_USE_KEY);
+            }
+
+            // 303 always becomes GET; 301/302 turn a non-GET/HEAD into GET
+            // (what browsers and curl do); 307/308 keep method and body.
+            $method = strtoupper($method);
+            $toGet = $status === 303 || (in_array($status, [301, 302], true) && !in_array($method, ['GET', 'HEAD'], true));
+
+            return self::request($toGet ? 'GET' : $method, $nextUrl, $toGet ? null : $body, $headers, $timeoutSeconds, $maxRedirects - 1);
+        }
+
         return [
             'ok' => $error === null && $status >= 200 && $status < 300,
             'status' => $status,
@@ -98,5 +122,29 @@ class SafeHttpClient
             'body' => $responseBody,
             'error' => $error,
         ];
+    }
+
+    private static function resolveLocation(string $baseUrl, string $location): string
+    {
+        if (preg_match('#^https?://#i', $location)) {
+            return $location;
+        }
+
+        $base = parse_url($baseUrl);
+        $scheme = $base['scheme'] ?? 'http';
+
+        if (str_starts_with($location, '//')) {
+            return "{$scheme}:{$location}";
+        }
+
+        $origin = $scheme . '://' . ($base['host'] ?? '') . (isset($base['port']) ? ':' . $base['port'] : '');
+
+        if (str_starts_with($location, '/')) {
+            return $origin . $location;
+        }
+
+        $dir = rtrim(dirname($base['path'] ?? '/') === '.' ? '/' : str_replace('\\', '/', dirname($base['path'] ?? '/')), '/');
+
+        return $origin . $dir . '/' . $location;
     }
 }

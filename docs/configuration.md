@@ -15,7 +15,8 @@ particular host.
 | -------- | ------- | ------------ |
 | `ENV` | `development` | When set to `development`, enables verbose error display (`display_errors`, `E_ALL`) and makes the [error handler](api/errors.md) re-throw exceptions instead of returning a generic 500. Use anything else (e.g. `production`) in production. |
 | `DEBUG` | `true` | When `true`, edge function "invalid response" errors include a debug block with the resolved PHP binary path. Turn off in production. |
-| `APP_URL` | — | Not read anywhere by the app itself — it's a convention for your own scripts and the `curl` examples throughout this documentation. Set it to whatever base URL you're calling. |
+| `APP_URL` | — | A convention for your own scripts and the `curl` examples throughout this documentation. Also used as the fallback link base for [end-user auth emails](api/email-auth.md) (magic link, password reset, etc.) when a request doesn't supply its own `redirect_url`. |
+| `APP_KEY` | — | 32-byte key, base64-encoded (`openssl rand -base64 32`), used to encrypt SMTP passwords and email-API keys stored per project (see [Email config & Templates](api/email-auth.md)). Required before setting any project's email provider config. |
 
 ## Database
 

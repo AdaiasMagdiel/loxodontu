@@ -14,6 +14,7 @@ deadline, just an honest picture of what comes next.
 - **Cron jobs** — per-project scheduled jobs with retry, queues, recurring execution, and a single `worker.php` entry point for shared hosting cron integrations.
 - **Dashboard UI** — web interface to manage projects, tables, columns, RLS policies, API keys, storage buckets/files, and end users without touching the API directly. PHP-routed pages, each backed by a scoped Vue 3 component.
 - **Storage** — file upload and retrieval per project, organized into buckets. Object metadata lives in the database; access control reuses the same RLS engine as tables (storage policies), scoped per bucket. Manageable via the API and the dashboard's Storage screen (buckets, file browser with upload/download/delete). Local filesystem only for now.
+- **Auth: end-user email flows** — magic link login, password reset, email confirmation (with a per-project toggle to require it before login), and email change, each with owner-configurable SMTP/Resend delivery and freely editable email templates. Manageable via the API and the dashboard's Auth screen.
 
 ## Next
 

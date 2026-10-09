@@ -66,6 +66,7 @@ nav:
       - Tables & Schema: api/tables.md
       - API Keys & RLS: api/keys-and-rls.md
       - End Users: api/end-users.md
+      - Email Config & Templates: api/email-auth.md
       - REST Passthrough: api/rest-passthrough.md
       - Storage: api/storage.md
       - Errors & Responses: api/errors.md

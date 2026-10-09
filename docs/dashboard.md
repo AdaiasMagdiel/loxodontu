@@ -29,6 +29,7 @@ can do, your own application can also do directly over HTTP.
 | `/dashboard/projects/{project_id}/functions` | Manage edge functions |
 | `/dashboard/projects/{project_id}/cron-jobs` | Manage cron jobs |
 | `/dashboard/projects/{project_id}/end-users` | Manage a project's end users and roles |
+| `/dashboard/projects/{project_id}/auth` | Configure the email provider (SMTP/Resend), the require-email-confirmation toggle, and email templates — see [Email config & Templates](api/email-auth.md) |
 
 None of these routes require a separate auth mechanism from the API itself — you log in once, and
 the platform token drives every request the dashboard makes on your behalf.

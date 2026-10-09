@@ -11,6 +11,12 @@ namespace App\Net {
         /** @var array<string, mixed> */
         public static array $options = [];
 
+        /** @var array<int, array{0: int, 1: string}> Redirects ([status, location]) served before the final response. */
+        public static array $redirects = [];
+
+        /** @var string[] Every URL passed to curl_init(), in order. */
+        public static array $requested = [];
+
         public static function reset(): void
         {
             self::$initResult = 'curl-handle';
@@ -18,12 +24,15 @@ namespace App\Net {
             self::$error = '';
             self::$status = 200;
             self::$options = [];
+            self::$redirects = [];
+            self::$requested = [];
         }
     }
 
     function curl_init(string $url): mixed
     {
-        EdgeHttpCurlMock::$options['url'] = $url;
+        EdgeHttpCurlMock::$options = ['url' => $url];
+        EdgeHttpCurlMock::$requested[] = $url;
 
         return EdgeHttpCurlMock::$initResult;
     }
@@ -47,6 +56,15 @@ namespace App\Net {
 
     function curl_exec(mixed $handle): bool
     {
+        if (EdgeHttpCurlMock::$redirects !== []) {
+            [$status, $location] = array_shift(EdgeHttpCurlMock::$redirects);
+            EdgeHttpCurlMock::$status = $status;
+            (EdgeHttpCurlMock::$options[\CURLOPT_HEADERFUNCTION])($handle, "Location: {$location}\r\n");
+
+            return true;
+        }
+        EdgeHttpCurlMock::$status = EdgeHttpCurlMock::$status >= 300 && EdgeHttpCurlMock::$status < 400 ? 200 : EdgeHttpCurlMock::$status;
+
         if (isset(EdgeHttpCurlMock::$options[\CURLOPT_HEADERFUNCTION])) {
             $header = EdgeHttpCurlMock::$options[\CURLOPT_HEADERFUNCTION];
             $header($handle, "HTTP/1.1 " . EdgeHttpCurlMock::$status . " Test\r\n");
@@ -102,6 +120,48 @@ namespace {
     test('edge http helper accepts public http and https urls', function () {
         expect(App\Net\UrlGuard::assertAllowed('http://93.184.216.34')['port'])->toBe(80);
         expect(App\Net\UrlGuard::assertAllowed('https://93.184.216.34')['port'])->toBe(443);
+    });
+
+    test('edge http helper rejects hosts resolving only to private ipv6 addresses', function () {
+        expect(fn () => Http::get('http://[fc00::1]'))
+            ->toThrow(RuntimeException::class, 'Private and reserved network targets are not allowed.');
+    });
+
+    test('edge http helper rejects ipv6 link-local targets', function () {
+        expect(fn () => Http::get('http://[fe80::1]'))
+            ->toThrow(RuntimeException::class, 'Private and reserved network targets are not allowed.');
+    });
+
+    test('edge http helper follows redirects, re-validating every hop', function () {
+        EdgeHttpCurlMock::$redirects = [[302, '/next'], [301, 'https://93.184.216.35/final']];
+
+        $response = Http::get('https://93.184.216.34/start', ['Authorization' => 'Bearer secret']);
+
+        expect($response['status'])->toBe(200);
+        expect(EdgeHttpCurlMock::$requested)->toBe([
+            'https://93.184.216.34/start',
+            'https://93.184.216.34/next',
+            'https://93.184.216.35/final',
+        ]);
+        // Credentials never travel to a different host.
+        expect(EdgeHttpCurlMock::$options[\CURLOPT_HTTPHEADER])->not->toContain('Authorization: Bearer secret');
+    });
+
+    test('edge http helper refuses a redirect to a private address', function () {
+        EdgeHttpCurlMock::$redirects = [[302, 'http://169.254.169.254/latest/meta-data/']];
+
+        expect(fn () => Http::get('https://93.184.216.34/start'))
+            ->toThrow(RuntimeException::class, 'Private and reserved network targets are not allowed.');
+        expect(EdgeHttpCurlMock::$requested)->toBe(['https://93.184.216.34/start']);
+    });
+
+    test('a 303 redirect turns a post into a get without the body', function () {
+        EdgeHttpCurlMock::$redirects = [[303, '/done']];
+
+        Http::post('https://93.184.216.34/submit', ['a' => 1]);
+
+        expect(EdgeHttpCurlMock::$options[\CURLOPT_CUSTOMREQUEST])->toBe('GET');
+        expect(EdgeHttpCurlMock::$options)->not->toHaveKey(\CURLOPT_POSTFIELDS);
     });
 
     test('edge http helper performs get requests through curl', function () {

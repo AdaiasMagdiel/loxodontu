@@ -16,6 +16,14 @@ use RuntimeException;
  */
 class Bridge
 {
+    /**
+     * Ceiling on how long a single call waits for the parent's response,
+     * independent of (and shorter than) the function's own execution
+     * timeout, so a stuck parent fails the call with a clear error instead
+     * of leaving the child blocked until the outer process timeout fires.
+     */
+    private const RESPONSE_TIMEOUT_SECONDS = 20;
+
     /** @var resource|null */
     private static $requestPipe = null;
 
@@ -34,6 +42,8 @@ class Bridge
         if ($request === false || $response === false) {
             return false;
         }
+
+        stream_set_timeout($response, self::RESPONSE_TIMEOUT_SECONDS);
 
         self::$requestPipe = $request;
         self::$responsePipe = $response;
@@ -64,6 +74,11 @@ class Bridge
         fflush(self::$requestPipe);
 
         $responseLine = fgets(self::$responsePipe);
+        if (stream_get_meta_data(self::$responsePipe)['timed_out'] ?? false) {
+            throw new RuntimeException(
+                'The sandbox bridge did not respond within ' . self::RESPONSE_TIMEOUT_SECONDS . ' seconds.',
+            );
+        }
         if ($responseLine === false) {
             throw new RuntimeException('The sandbox bridge closed the connection.');
         }

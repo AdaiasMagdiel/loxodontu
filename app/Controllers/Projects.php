@@ -99,6 +99,45 @@ class Projects
         return $res->withJson($project);
     }
 
+    /**
+     * Cheap, real, non-historical counts for the Overview page's stat cards —
+     * no time-series/sparkline data (would need stored history) and no
+     * request-count metric (no request-logging table exists).
+     */
+    public static function stats(Request $req, Response $res, stdClass $params): Response
+    {
+        $pdo     = Database::getConn('default');
+        $project = self::findOwned($pdo, $params->project_id, $params->user['id']);
+
+        if (!$project) {
+            return $res->setStatusCode(404)->withJson(['error' => 'Project not found']);
+        }
+
+        $id = $project['internal_id'];
+
+        $count = function (string $sql) use ($pdo, $id): int {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$id]);
+            return (int) $stmt->fetchColumn();
+        };
+
+        $storageBytes = $count(
+            'SELECT COALESCE(SUM(o.size), 0) FROM project_storage_objects o
+             INNER JOIN project_storage_buckets b ON b.id = o.bucket_id
+             WHERE b.project_id = ?'
+        );
+
+        return $res->withJson([
+            'tables'      => $count('SELECT COUNT(*) FROM project_tables WHERE project_id = ?'),
+            'end_users'   => $count('SELECT COUNT(*) FROM project_end_users WHERE project_id = ?'),
+            'api_keys'    => $count('SELECT COUNT(*) FROM project_api_keys WHERE project_id = ?'),
+            'cron_jobs'   => $count('SELECT COUNT(*) FROM cron_jobs WHERE project_id = ?'),
+            'functions'   => $count('SELECT COUNT(*) FROM project_functions WHERE project_id = ?'),
+            'buckets'     => $count('SELECT COUNT(*) FROM project_storage_buckets WHERE project_id = ?'),
+            'storage_bytes' => $storageBytes,
+        ]);
+    }
+
     public static function update(Request $req, Response $res, stdClass $params): Response
     {
         $body = $req->getJson(ignoreContentType: true) ?? [];

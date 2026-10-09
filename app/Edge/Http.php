@@ -11,7 +11,7 @@ use RuntimeException;
  * Inside the sandbox the child has no network functions at all: requests
  * are handed to the parent process over the Bridge, which performs them
  * through App\Net\SafeHttpClient (http/https only, public addresses only,
- * pinned DNS, no redirects, capped body). Outside the sandbox (class-based
+ * pinned DNS, redirects re-validated hop by hop, capped body). Outside the sandbox (class-based
  * handlers run by platform admins) it calls SafeHttpClient directly.
  */
 class Http
@@ -56,7 +56,7 @@ class Http
         $timeoutSeconds = min(max(1, $timeoutSeconds), 10);
 
         if (!Bridge::isOpen()) {
-            return SafeHttpClient::request($method, $url, $payload === false ? null : $payload, $headers, $timeoutSeconds);
+            return SafeHttpClient::request($method, $url, $payload === false ? null : $payload, $headers, $timeoutSeconds, SafeHttpClient::MAX_REDIRECTS);
         }
 
         $response = Bridge::call([
@@ -66,6 +66,7 @@ class Http
             'body' => $payload === false ? null : $payload,
             'headers' => $headers,
             'timeout' => $timeoutSeconds,
+            'max_redirects' => 5,
         ]);
 
         if (isset($response['exception'])) {
