@@ -1,0 +1,7 @@
+/* logo-loxodontu.svg is drawn in solid black; the header/nav-drawer bar is
+   always the primary color (indigo) regardless of light/dark mode, so the
+   logo there must always be white. */
+.md-header__button.md-logo img,
+.md-nav__title .md-logo img {
+  filter: brightness(0) invert(1);
+}
