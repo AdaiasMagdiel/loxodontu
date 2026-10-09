@@ -2,7 +2,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
 
         <!-- LOGIN / REGISTER -->
         <div v-if="!store.auth" class="min-h-screen -mt-8 -mx-8 flex items-center justify-center px-4">
@@ -63,13 +63,13 @@ ob_start();
             </div>
             <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
                 <a v-for="p in projects.slice(0, 5)" :key="p.id" :href="'/dashboard/projects/' + p.id"
-                    class="flex items-center justify-between px-5 py-3 no-underline"
+                    class="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 no-underline"
                     style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
-                    <div>
+                    <div class="min-w-0 break-words">
                         <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ p.name }}</p>
                         <p class="text-xs font-mono" style="color:var(--text-muted);">{{ p.slug }}</p>
                     </div>
-                    <span class="text-xs" style="color:var(--text-muted);">{{ formatDate(p.created_at) }}</span>
+                    <span class="text-xs shrink-0" style="color:var(--text-muted);">{{ formatDate(p.created_at) }}</span>
                 </a>
             </div>
         </div>

@@ -2,7 +2,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="flex items-center justify-between mb-6">
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide" style="color:var(--text-main);">Projects</h1>
             <button class="btn-accent" @click="openModal()">+ New Project</button>
@@ -15,18 +15,18 @@ ob_start();
         <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
             <div v-for="p in projects" :key="p.id" class="flex flex-col"
                 style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
-                <div class="flex items-center justify-between px-5 py-3">
-                    <a :href="'/dashboard/projects/' + p.id" class="no-underline flex-1">
+                <div class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3">
+                    <a :href="'/dashboard/projects/' + p.id" class="no-underline min-w-0 grow basis-48 break-words">
                         <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ p.name }}</p>
                         <p class="text-xs" style="color:var(--text-muted);">{{ p.description || 'No description' }}</p>
                     </a>
-                    <span class="text-xs font-mono mr-4" style="color:var(--text-muted);">{{ p.slug }}</span>
+                    <span class="hidden sm:inline text-xs font-mono mr-4" style="color:var(--text-muted);">{{ p.slug }}</span>
                     <div class="flex items-center gap-2">
                         <button class="btn-ghost" @click="startRename(p)">Rename</button>
                         <button class="btn-ghost-danger" @click="deleteProject(p)">Delete</button>
                     </div>
                 </div>
-                <div v-if="renaming === p.id" class="px-5 pb-4 flex flex-col gap-2" style="border-top:1px solid var(--border);">
+                <div v-if="renaming === p.id" class="px-4 sm:px-5 pb-4 flex flex-col gap-2" style="border-top:1px solid var(--border);">
                     <label class="field-label mt-2">Name
                         <input v-model="renameForm.name" class="input mt-1" />
                     </label>

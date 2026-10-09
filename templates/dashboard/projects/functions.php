@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-6xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-6xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '...' }}</h1>
@@ -23,14 +23,14 @@ ob_start();
                     No functions registered yet.
                 </div>
                 <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
-                    <div v-for="fn in functions" :key="fn.id" class="px-5 py-4" style="background:var(--bg-surface); border-bottom:1px solid var(--border);">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="flex items-center gap-2">
+                    <div v-for="fn in functions" :key="fn.id" class="px-4 sm:px-5 py-4" style="background:var(--bg-surface); border-bottom:1px solid var(--border);">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0 grow basis-56">
+                                <div class="flex flex-wrap items-center gap-2">
                                     <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ fn.name }}</p>
                                     <span class="text-[10px] font-mono px-2 py-0.5 rounded" style="background:var(--bg-hover); color:var(--text-muted);">{{ fn.enabled ? 'enabled' : 'disabled' }}</span>
                                 </div>
-                                <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">/api/v1/{{ PROJECT_ID }}/functions/{{ fn.slug }}</p>
+                                <p class="text-xs font-mono mt-1 break-all" style="color:var(--text-muted);">/api/v1/{{ PROJECT_ID }}/functions/{{ fn.slug }}</p>
                                 <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">PHP · {{ fn.timeout_seconds }}s · {{ fn.memory_limit_mb }}MB</p>
                                 <p v-if="fn.description" class="text-xs mt-2" style="color:var(--text-muted);">{{ fn.description }}</p>
                             </div>
@@ -84,7 +84,7 @@ ob_start();
                         <input type="file" accept=".php,text/x-php,text/plain" class="hidden" @change="loadSourceFile" />
                     </label>
                 </div>
-                <textarea v-model="form.source_code" class="input font-mono min-h-[260px]" spellcheck="false"></textarea>
+                <textarea v-model="form.source_code" class="input font-mono min-h-[260px] overflow-x-auto" wrap="off" spellcheck="false"></textarea>
                 <div class="flex gap-4 mt-3">
                     <label class="flex items-center gap-2 text-xs" style="color:var(--text-main);"><input type="checkbox" v-model="form.require_api_key" /> Require API key</label>
                     <label class="flex items-center gap-2 text-xs" style="color:var(--text-main);"><input type="checkbox" v-model="form.enabled" /> Enabled</label>

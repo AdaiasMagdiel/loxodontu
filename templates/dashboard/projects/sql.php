@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '...' }}</h1>
@@ -17,19 +17,19 @@ ob_start();
         </div>
 
         <div class="rounded-lg overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-            <div class="p-5">
+            <div class="p-4 sm:p-5">
                 <textarea v-model="sqlState.sql" class="input font-mono min-h-[220px]" spellcheck="false" placeholder="insert into posts (title) values ('Hello');&#10;select id, title from posts;" @keydown.ctrl.enter.prevent="runSql"></textarea>
                 <div class="flex items-center justify-between gap-3 mt-2 text-xs" style="color:var(--text-muted);">
                     <span>Use logical table names like posts. Separate commands by line or semicolon.</span>
-                    <span class="font-mono shrink-0">Ctrl+Enter</span>
+                    <span class="hidden sm:inline font-mono shrink-0">Ctrl+Enter</span>
                 </div>
             </div>
         </div>
 
         <div v-if="sqlState.results.length" class="mt-5 space-y-4">
             <div v-for="result in sqlState.results" :key="result.index" class="rounded-lg overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-                <div class="px-5 py-3" style="border-bottom:1px solid var(--border);">
-                    <div class="flex items-center justify-between gap-3">
+                <div class="px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border);">
+                    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                         <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">Command {{ result.index }}</p>
                         <p class="text-xs font-mono" style="color:var(--text-muted);">
                             {{ result.operation }} · {{ result.affected_rows }} affected rows · {{ result.duration_ms }}ms
@@ -49,7 +49,7 @@ ob_start();
                         </thead>
                         <tbody>
                             <tr v-for="(row, idx) in result.rows" :key="idx" style="border-bottom:1px solid var(--border);">
-                                <td v-for="col in result.columns" :key="col" class="px-3 py-2" style="color:var(--text-main);">{{ row[col] }}</td>
+                                <td v-for="col in result.columns" :key="col" class="px-3 py-2 whitespace-nowrap max-w-[24rem] truncate" style="color:var(--text-main);" :title="row[col]">{{ row[col] }}</td>
                             </tr>
                         </tbody>
                     </table>

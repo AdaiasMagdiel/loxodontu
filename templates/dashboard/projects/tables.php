@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '…' }}</h1>
@@ -23,8 +23,8 @@ ob_start();
             </div>
 
             <div v-for="table in tables" :key="table.id" class="rounded-lg mb-3 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-                <div class="flex items-center justify-between px-5 py-3 cursor-pointer" @click="toggleTable(table.id)">
-                    <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 cursor-pointer" @click="toggleTable(table.id)">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                         <span class="font-head font-medium text-sm" style="color:var(--text-main);">{{ table.name }}</span>
                         <span class="text-xs font-mono" style="color:var(--text-muted);">{{ table.columns.length + 1 }} columns incl. id</span>
                     </div>
@@ -34,24 +34,24 @@ ob_start();
                     </div>
                 </div>
 
-                <div v-if="ui(table.id).renaming" class="px-5 pb-3 flex gap-2" @click.stop>
-                    <input v-model="ui(table.id).renameValue" class="input" placeholder="New table name" />
+                <div v-if="ui(table.id).renaming" class="px-4 sm:px-5 pb-3 flex flex-wrap gap-2" @click.stop>
+                    <input v-model="ui(table.id).renameValue" class="input flex-1 min-w-[160px]" placeholder="New table name" />
                     <button class="btn-accent" @click="submitRename(table)">Save</button>
                     <button class="btn-ghost" @click="ui(table.id).renaming = false">Cancel</button>
                 </div>
 
                 <div v-if="ui(table.id).expanded" style="border-top:1px solid var(--border);">
                     <!-- Columns -->
-                    <div class="px-5 py-4">
+                    <div class="px-4 sm:px-5 py-4">
                         <p class="font-head font-medium text-xs uppercase tracking-widest mb-2" style="color:var(--text-muted);">Columns</p>
                         <div class="rounded-md overflow-hidden mb-3" style="border:1px solid var(--border);">
-                            <div class="flex items-center px-3 py-2 text-xs font-mono" style="border-bottom:1px solid var(--border); color:var(--text-muted);">
-                                <span class="w-28">id</span><span class="flex-1">BIGINT UNSIGNED</span><span class="w-48">primary key, auto increment</span>
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs font-mono" style="border-bottom:1px solid var(--border); color:var(--text-muted);">
+                                <span class="w-28 shrink-0">id</span><span>BIGINT UNSIGNED</span><span>primary key, auto increment</span>
                             </div>
                             <div v-for="col in table.columns" :key="col.id" class="px-3 py-2" style="border-bottom:1px solid var(--border);">
-                                <div v-if="ui(table.id).editingColumn !== col.id" class="flex items-center justify-between">
-                                    <div class="flex items-center gap-3 font-mono text-xs" style="color:var(--text-main);">
-                                        <span class="w-28 truncate">{{ col.name }}</span>
+                                <div v-if="ui(table.id).editingColumn !== col.id" class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs min-w-0" style="color:var(--text-main);">
+                                        <span class="w-28 truncate shrink-0">{{ col.name }}</span>
                                         <span style="color:var(--text-muted);">{{ col.type }}</span>
                                         <span v-if="col.nullable" style="color:var(--text-muted);">nullable</span>
                                         <span v-if="col.default_value !== null" style="color:var(--text-muted);">default: {{ col.default_value }}</span>
@@ -101,19 +101,19 @@ ob_start();
                     </div>
 
                     <!-- RLS Policies -->
-                    <div class="px-5 py-4" style="border-top:1px solid var(--border);">
+                    <div class="px-4 sm:px-5 py-4" style="border-top:1px solid var(--border);">
                         <p class="font-head font-medium text-xs uppercase tracking-widest mb-2" style="color:var(--text-muted);">RLS Policies</p>
 
                         <div v-if="!ui(table.id).policiesLoaded" class="text-xs" style="color:var(--text-muted);">Loading…</div>
                         <div v-else>
                             <div v-if="ui(table.id).policies.length === 0" class="text-xs mb-3" style="color:var(--text-muted);">No policies — table is unrestricted.</div>
-                            <div v-for="pol in ui(table.id).policies" :key="pol.id" class="flex items-center justify-between px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
-                                <div class="text-xs font-mono" style="color:var(--text-main);">
+                            <div v-for="pol in ui(table.id).policies" :key="pol.id" class="flex items-center justify-between gap-3 px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
+                                <div class="text-xs font-mono min-w-0 break-words" style="color:var(--text-main);">
                                     <span class="font-head font-medium uppercase">{{ pol.operation }}</span>
                                     <span v-if="pol.name" style="color:var(--text-muted);"> · {{ pol.name }}</span>
                                     <span style="color:var(--text-muted);"> · {{ pol.expression }}</span>
                                 </div>
-                                <button class="btn-ghost-danger" @click="deletePolicy(table, pol)">Delete</button>
+                                <button class="btn-ghost-danger shrink-0" @click="deletePolicy(table, pol)">Delete</button>
                             </div>
 
                             <div class="flex items-center gap-2 flex-wrap mt-2">

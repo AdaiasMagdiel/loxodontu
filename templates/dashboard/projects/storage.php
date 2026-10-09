@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '…' }}</h1>
@@ -23,8 +23,8 @@ ob_start();
             </div>
 
             <div v-for="bucket in buckets" :key="bucket.id" class="rounded-lg mb-3 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border);">
-                <div class="flex items-center justify-between px-5 py-3 cursor-pointer" @click="toggleBucket(bucket)">
-                    <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 cursor-pointer" @click="toggleBucket(bucket)">
+                    <div class="flex items-center gap-3 min-w-0">
                         <span class="font-head font-medium text-sm" style="color:var(--text-main);">{{ bucket.name }}</span>
                         <span class="text-xs font-head uppercase tracking-wide px-2 py-0.5 rounded" :style="bucket.public ? 'background:var(--accent-dim); color:var(--accent);' : 'border:1px solid var(--border); color:var(--text-muted);'">
                             {{ bucket.public ? 'Public' : 'Private' }}
@@ -38,7 +38,7 @@ ob_start();
 
                 <div v-if="ui(bucket.id).expanded" style="border-top:1px solid var(--border);">
                     <!-- Objects -->
-                    <div class="px-5 py-4">
+                    <div class="px-4 sm:px-5 py-4">
                         <div class="flex items-center justify-between mb-2">
                             <p class="font-head font-medium text-xs uppercase tracking-widest" style="color:var(--text-muted);">Files</p>
                             <span class="text-xs" style="color:var(--text-muted);">{{ ui(bucket.id).objects.length }} file(s)</span>
@@ -48,8 +48,8 @@ ob_start();
                         <template v-else>
                             <div v-if="ui(bucket.id).objects.length === 0" class="text-xs mb-3" style="color:var(--text-muted);">No files yet.</div>
                             <div v-else class="rounded-md overflow-hidden mb-3" style="border:1px solid var(--border);">
-                                <div v-for="obj in ui(bucket.id).objects" :key="obj.id" class="flex items-center justify-between px-3 py-2" style="border-bottom:1px solid var(--border);">
-                                    <div class="flex items-center gap-3 min-w-0">
+                                <div v-for="obj in ui(bucket.id).objects" :key="obj.id" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2" style="border-bottom:1px solid var(--border);">
+                                    <div class="flex items-center gap-3 min-w-0 grow basis-56">
                                         <button v-if="isImage(obj)" class="shrink-0" @click="previewObject(bucket, obj)" title="Preview">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color:var(--accent);">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -69,7 +69,7 @@ ob_start();
                         </template>
 
                         <div class="flex items-center gap-2 flex-wrap">
-                            <input type="file" :ref="el => setFileInput(bucket.id, el)" class="text-xs" style="color:var(--text-muted);" />
+                            <input type="file" :ref="el => setFileInput(bucket.id, el)" class="text-xs max-w-full" style="color:var(--text-muted);" />
                             <input v-model="ui(bucket.id).uploadPath" placeholder="path (optional, defaults to file name)" class="input flex-1 min-w-[160px]" />
                             <button class="btn-accent" :disabled="ui(bucket.id).uploading" @click="uploadObject(bucket)">
                                 {{ ui(bucket.id).uploading ? 'Uploading…' : '+ Upload' }}
@@ -78,7 +78,7 @@ ob_start();
                     </div>
 
                     <!-- Policies -->
-                    <div class="px-5 py-4" style="border-top:1px solid var(--border);">
+                    <div class="px-4 sm:px-5 py-4" style="border-top:1px solid var(--border);">
                         <p class="font-head font-medium text-xs uppercase tracking-widest mb-2" style="color:var(--text-muted);">Storage Policies</p>
 
                         <div v-if="!ui(bucket.id).policiesLoaded" class="text-xs" style="color:var(--text-muted);">Loading…</div>
@@ -86,13 +86,13 @@ ob_start();
                             <div v-if="ui(bucket.id).policies.length === 0" class="text-xs mb-3" style="color:var(--text-muted);">
                                 No policies — every <span class="font-mono">storage:*</span>-scoped API key can do anything through the passthrough.
                             </div>
-                            <div v-for="pol in ui(bucket.id).policies" :key="pol.id" class="flex items-center justify-between px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
-                                <div class="text-xs font-mono" style="color:var(--text-main);">
+                            <div v-for="pol in ui(bucket.id).policies" :key="pol.id" class="flex items-center justify-between gap-3 px-3 py-2 mb-2 rounded-md" style="border:1px solid var(--border);">
+                                <div class="text-xs font-mono min-w-0 break-words" style="color:var(--text-main);">
                                     <span class="font-head font-medium uppercase">{{ pol.operation }}</span>
                                     <span v-if="pol.name" style="color:var(--text-muted);"> · {{ pol.name }}</span>
                                     <span style="color:var(--text-muted);"> · {{ pol.expression }}</span>
                                 </div>
-                                <button class="btn-ghost-danger" @click="deletePolicy(bucket, pol)">Delete</button>
+                                <button class="btn-ghost-danger shrink-0" @click="deletePolicy(bucket, pol)">Delete</button>
                             </div>
 
                             <div class="flex items-center gap-2 flex-wrap mt-2">

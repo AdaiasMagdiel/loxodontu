@@ -69,8 +69,21 @@ $projectNavItems = [
         .font-head { font-family: 'Oswald', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
-        .no-auth .sidebar, .no-auth .topbar { display: none; }
+        .no-auth .sidebar, .no-auth .topbar, .no-auth .sidebar-backdrop { display: none; }
         .no-auth .main-wrapper { margin-left: 0; margin-top: 0; min-height: 100vh; }
+
+        /* Below lg the sidebar is an off-canvas drawer toggled from the topbar. */
+        .sidebar { transition: transform .2s ease; }
+        .sidebar-backdrop { display: none; }
+        @media (max-width: 1023.98px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar-open .sidebar { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+            .sidebar-open .sidebar-backdrop { display: block; }
+            .sidebar-open { overflow: hidden; }
+        }
+
+        .scroll-x { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .scroll-x::-webkit-scrollbar { display: none; }
 
         .icon-sun, .icon-moon { display: none; }
         [data-theme="dark"]  .icon-moon { display: inline; }
@@ -95,7 +108,7 @@ $projectNavItems = [
         .btn-ghost-danger { display:inline-flex; align-items:center; gap:0.4rem; background:transparent; color:#F85149; font-family:'Oswald', sans-serif; font-weight:500; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; padding:0.4rem 0.8rem; border-radius:6px; border:1px solid var(--border); cursor:pointer; }
         .btn-ghost-danger:hover { border-color:#F85149; background:rgba(248,81,73,0.08); }
 
-        .tab-link { padding:0.4rem 0.85rem; border-radius:6px; font-family:'Oswald', sans-serif; font-weight:500; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; text-decoration:none; border:1px solid var(--border); color:var(--text-muted); }
+        .tab-link { flex-shrink:0; white-space:nowrap; padding:0.4rem 0.85rem; border-radius:6px; font-family:'Oswald', sans-serif; font-weight:500; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; text-decoration:none; border:1px solid var(--border); color:var(--text-muted); }
         .tab-link.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
 
         .stat-card { background:var(--bg-surface); padding:1.25rem 1.5rem; }
@@ -103,7 +116,11 @@ $projectNavItems = [
         .stat-value { font-family:'Oswald', sans-serif; font-weight:700; font-size:2rem; color:var(--text-main); line-height:1; }
 
         .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:100; padding:1rem; }
-        .modal-card { width:100%; max-width:28rem; max-height:calc(100vh - 2rem); overflow-y:auto; background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:1.5rem; }
+        .modal-card { width:100%; max-width:28rem; max-height:calc(100dvh - 2rem); overflow-y:auto; overflow-x:hidden; background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:1.5rem; }
+        @media (max-width: 639.98px) {
+            .modal-backdrop { padding: 0.75rem; }
+            .modal-card { padding: 1.1rem; max-height: calc(100dvh - 1.5rem); }
+        }
         .modal-title { font-family:'Oswald', sans-serif; font-weight:700; font-size:1rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-main); margin-bottom:1rem; }
     </style>
     <script>
@@ -117,7 +134,9 @@ $projectNavItems = [
 
 <body class="min-h-screen">
 
-    <aside class="sidebar fixed inset-y-0 left-0 h-full w-60 flex flex-col z-50"
+    <div class="sidebar-backdrop fixed inset-0 z-40 lg:hidden" style="background:rgba(0,0,0,0.5);" onclick="toggleSidebar(false)"></div>
+
+    <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 h-full w-60 flex flex-col z-50"
         style="background:var(--bg-surface); border-right:1px solid var(--border);">
         <a href="/" class="h-14 flex items-center gap-2 px-5 no-underline" style="border-bottom:1px solid var(--border);">
             <span class="w-2 h-2 rounded-full" style="background:var(--accent); box-shadow:0 0 8px var(--accent);"></span>
@@ -163,12 +182,21 @@ $projectNavItems = [
         </div>
     </aside>
 
-    <header class="topbar fixed top-0 right-0 left-60 h-14 flex items-center justify-between px-6 z-40"
+    <header class="topbar fixed top-0 right-0 left-0 lg:left-60 h-14 flex items-center justify-between gap-3 px-4 lg:px-6 z-30"
         style="background:var(--bg-surface); border-bottom:1px solid var(--border);">
-        <span class="font-head font-bold text-sm uppercase tracking-wider" style="color:var(--text-main);">
-            <?= e($page['info']['pageTitle'] ?? 'Dashboard') ?>
-        </span>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+            <button type="button" onclick="toggleSidebar()" aria-label="Open menu" aria-controls="sidebar"
+                class="lg:hidden flex items-center justify-center w-9 h-9 -ml-1 rounded-md cursor-pointer shrink-0"
+                style="background:none; border:1px solid var(--border); color:var(--text-main);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <span class="font-head font-bold text-sm uppercase tracking-wider truncate" style="color:var(--text-main);">
+                <?= e($page['info']['pageTitle'] ?? 'Dashboard') ?>
+            </span>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
             <button onclick="toggleTheme()" aria-label="Toggle theme"
                 class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-head font-medium uppercase tracking-wider cursor-pointer"
                 style="background:none; border:1px solid var(--border); color:var(--text-muted);">
@@ -179,14 +207,13 @@ $projectNavItems = [
                     <circle cx="12" cy="12" r="5" />
                     <path stroke-linecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
-                <span class="icon-moon">Light</span>
-                <span class="icon-sun">Dark</span>
+                <span class="hidden sm:inline"><span class="icon-moon">Light</span><span class="icon-sun">Dark</span></span>
             </button>
 
             <div class="flex items-center gap-2 text-sm font-head font-medium uppercase tracking-wide" style="color:var(--text-muted);">
                 <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-head font-bold"
                     style="background:var(--accent-dim); border:1px solid var(--border); color:var(--accent);" id="user-initials">--</div>
-                <span id="user-name-chip"></span>
+                <span id="user-name-chip" class="hidden md:inline max-w-[12rem] truncate"></span>
             </div>
 
             <button onclick="platformLogout()" aria-label="Log out"
@@ -197,7 +224,7 @@ $projectNavItems = [
         </div>
     </header>
 
-    <div class="main-wrapper ml-60 mt-14 min-h-[calc(100vh-3.5rem)]">
+    <div class="main-wrapper lg:ml-60 mt-14 min-h-[calc(100vh-3.5rem)] min-w-0">
         <div id="app">
             <page></page>
         </div>
@@ -277,6 +304,24 @@ $projectNavItems = [
 
     <script>
         __APP.mount('#app');
+
+        function toggleSidebar(open) {
+            var body = document.body;
+            var next = typeof open === 'boolean' ? open : !body.classList.contains('sidebar-open');
+            body.classList.toggle('sidebar-open', next);
+        }
+        // Escape closes the topmost open modal (same as clicking its backdrop —
+        // every modal closes via @click.self), otherwise the mobile sidebar.
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            var backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length) {
+                backdrops[backdrops.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                return;
+            }
+            toggleSidebar(false);
+        });
+        window.matchMedia('(min-width: 1024px)').addEventListener('change', function () { toggleSidebar(false); });
 
         function toggleTheme() {
             var el = document.documentElement;

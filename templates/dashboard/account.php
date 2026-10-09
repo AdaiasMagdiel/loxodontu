@@ -2,7 +2,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-2xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-2xl mx-auto">
         <h1 class="font-head font-bold text-2xl uppercase tracking-wide mb-6" style="color:var(--text-main);">Account</h1>
 
         <!-- Profile -->

@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div v-if="loading" class="text-sm" style="color:var(--text-muted);">Loading…</div>
         <div v-else-if="!project" class="text-sm" style="color:var(--text-muted);">Project not found.</div>
         <template v-else>

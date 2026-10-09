@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '…' }}</h1>
@@ -18,12 +18,12 @@ ob_start();
             No end users have registered for this project yet.
         </div>
         <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
-            <div v-for="u in endUsers" :key="u.id" class="flex items-center justify-between px-5 py-3" style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
-                <div>
+            <div v-for="u in endUsers" :key="u.id" class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
+                <div class="min-w-0 break-all">
                     <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ u.email }}</p>
                     <p class="text-xs" style="color:var(--text-muted);">Joined {{ formatDate(u.created_at) }}</p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <input v-model="roleDrafts[u.id]" placeholder="role" class="input w-32" />
                     <button class="btn-ghost" @click="saveRole(u)">Save</button>
                     <button class="btn-ghost-danger" @click="deleteEndUser(u)">Remove</button>

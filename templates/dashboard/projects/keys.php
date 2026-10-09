@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-5xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '…' }}</h1>
@@ -18,8 +18,8 @@ ob_start();
 
         <div v-if="revealedKey" class="rounded-lg p-4 mb-4" style="background:var(--accent-dim); border:1px solid var(--accent);">
             <p class="text-xs font-head uppercase tracking-wide mb-1" style="color:var(--accent);">Save this key — it won't be shown again</p>
-            <div class="flex items-center gap-2">
-                <code class="text-xs font-mono flex-1 break-all" style="color:var(--text-main);">{{ revealedKey }}</code>
+            <div class="flex flex-wrap items-center gap-2">
+                <code class="text-xs font-mono grow basis-56 min-w-0 break-all" style="color:var(--text-main);">{{ revealedKey }}</code>
                 <button class="btn-ghost" @click="copyKey">Copy</button>
                 <button class="btn-ghost" @click="revealedKey = null">Dismiss</button>
             </div>
@@ -30,8 +30,8 @@ ob_start();
             No API keys yet.
         </div>
         <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
-            <div v-for="k in keys" :key="k.id" class="flex items-center justify-between px-5 py-3" style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
-                <div>
+            <div v-for="k in keys" :key="k.id" class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border); background:var(--bg-surface);">
+                <div class="min-w-0 break-words">
                     <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ k.name }}</p>
                     <p class="text-xs font-mono" style="color:var(--text-muted);">{{ k.key_prefix }}… · {{ k.permissions.join(', ') }}</p>
                 </div>

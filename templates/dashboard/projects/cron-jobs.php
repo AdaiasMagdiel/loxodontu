@@ -3,7 +3,7 @@
 ob_start();
 ?>
 <template id="tpl-page">
-    <main class="px-8 py-8 max-w-6xl mx-auto">
+    <main class="px-4 py-6 sm:px-8 sm:py-8 max-w-6xl mx-auto">
         <div class="mb-6">
             <a href="/dashboard/projects" class="text-xs font-head uppercase tracking-wide no-underline" style="color:var(--text-muted);">&larr; Projects</a>
             <h1 class="font-head font-bold text-2xl uppercase tracking-wide mt-1" style="color:var(--text-main);">{{ project ? project.name : '...' }}</h1>
@@ -21,15 +21,15 @@ ob_start();
             No cron jobs registered yet.
         </div>
         <div v-else class="rounded-lg overflow-hidden" style="border:1px solid var(--border);">
-            <div v-for="job in jobs" :key="job.id" class="px-5 py-4" style="background:var(--bg-surface); border-bottom:1px solid var(--border);">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <div class="flex items-center gap-2">
+            <div v-for="job in jobs" :key="job.id" class="px-4 sm:px-5 py-4" style="background:var(--bg-surface); border-bottom:1px solid var(--border);">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0 grow basis-56">
+                        <div class="flex flex-wrap items-center gap-2">
                             <p class="font-head font-medium text-sm" style="color:var(--text-main);">{{ job.name }}</p>
                             <span class="text-[10px] font-mono px-2 py-0.5 rounded" style="background:var(--bg-hover); color:var(--text-muted);">{{ job.type }}</span>
                             <span class="text-[10px] font-mono px-2 py-0.5 rounded" style="background:var(--bg-hover); color:var(--text-muted);">{{ job.last_status }}</span>
                         </div>
-                        <p class="text-xs font-mono mt-1" style="color:var(--text-muted);">{{ job.queue }} · {{ job.target }}</p>
+                        <p class="text-xs font-mono mt-1 break-all" style="color:var(--text-muted);">{{ job.queue }} · {{ job.target }}</p>
                         <p class="text-xs mt-2" style="color:var(--text-muted);">Next: {{ formatDate(job.next_run_at) }} · Failures: {{ job.failure_count }}</p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
@@ -39,7 +39,7 @@ ob_start();
                     </div>
                 </div>
                 <div v-if="runsFor === job.id" class="mt-3 rounded-md overflow-hidden" style="border:1px solid var(--border);">
-                    <div v-for="run in runs" :key="run.id" class="px-3 py-2 text-xs font-mono" style="border-bottom:1px solid var(--border); color:var(--text-muted);">
+                    <div v-for="run in runs" :key="run.id" class="px-3 py-2 text-xs font-mono break-words" style="border-bottom:1px solid var(--border); color:var(--text-muted);">
                         {{ run.started_at }} · {{ run.status }} · attempt {{ run.attempt }} · {{ run.duration_ms || 0 }}ms
                         <span v-if="run.error"> · {{ run.error }}</span>
                     </div>

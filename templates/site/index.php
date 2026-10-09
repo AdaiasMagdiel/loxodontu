@@ -121,6 +121,13 @@
         .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
         .theme-toggle svg { width: 14px; height: 14px; }
 
+        @media (max-width: 480px) {
+            nav { padding: 0 1rem; }
+            .nav-brand { font-size: 1.05rem; }
+            .nav-right { gap: 0.9rem; }
+            .theme-toggle .label { display: none; }
+        }
+
         /* ── HERO ────────────────────────────────────────── */
         .hero {
             padding: 140px 2rem 80px;
@@ -159,7 +166,7 @@
         .hero h1 {
             font-family: var(--font-head);
             font-weight: 700;
-            font-size: clamp(2.8rem, 7vw, 5.5rem);
+            font-size: clamp(1.9rem, 8.5vw, 5.5rem);
             text-transform: uppercase;
             letter-spacing: 0.04em;
             line-height: 1.05;
@@ -411,8 +418,7 @@
                     <circle cx="12" cy="12" r="5"/>
                     <path stroke-linecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
                 </svg>
-                <span class="icon-moon">Light</span>
-                <span class="icon-sun">Dark</span>
+                <span class="label"><span class="icon-moon">Light</span><span class="icon-sun">Dark</span></span>
             </button>
         </div>
     </nav>
