@@ -22,6 +22,8 @@ use stdClass;
  */
 class EndUsers
 {
+    private const REDIRECT_NOT_ALLOWED = 'redirect_url is not one of the project\'s allowed redirect URLs';
+
     public static function register(Request $req, Response $res, stdClass $params): Response
     {
         $body = $req->getJson(ignoreContentType: true) ?? [];
@@ -47,11 +49,22 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'Password must be at least 8 characters']);
         }
 
+        $redirect = AuthSettings::resolveRedirect($pdo, (int) $project['id'], $body['redirect_url'] ?? null);
+        if ($redirect === false) {
+            return $res->setStatusCode(422)->withJson(['error' => self::REDIRECT_NOT_ALLOWED]);
+        }
+
         $stmt = $pdo->prepare('SELECT id FROM project_end_users WHERE project_id = ? AND email = ? LIMIT 1');
         $stmt->execute([$project['id'], $email]);
 
         if ($stmt->fetch()) {
             return $res->setStatusCode(409)->withJson(['error' => 'Email already registered']);
+        }
+
+        $confirmationRequired = self::requiresEmailConfirmation($pdo, $project['id']);
+
+        if ($confirmationRequired && ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email))) {
+            return $limited;
         }
 
         // Role is never client-assignable at registration — only a project owner
@@ -66,8 +79,8 @@ class EndUsers
 
         // With confirmation required, registering does not also log the user
         // in — they must verify first, same as a plain login would demand below.
-        if (self::requiresEmailConfirmation($pdo, $project['id'])) {
-            self::sendPurposeEmail($pdo, $project['id'], $userId, $email, 'email_verification', $body['redirect_url'] ?? null);
+        if ($confirmationRequired) {
+            self::sendPurposeEmail($pdo, $project['id'], $userId, $email, 'email_verification', $redirect);
 
             return $res->setStatusCode(201)->withJson([
                 'token' => null,
@@ -162,13 +175,18 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
         }
 
+        $redirect = AuthSettings::resolveRedirect($pdo, (int) $project['id'], $body['redirect_url'] ?? null);
+        if ($redirect === false) {
+            return $res->setStatusCode(422)->withJson(['error' => self::REDIRECT_NOT_ALLOWED]);
+        }
+
         if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
             return $limited;
         }
 
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
         if ($user) {
-            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'magic_link', $body['redirect_url'] ?? null, '+15 minutes');
+            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'magic_link', $redirect, '+15 minutes');
         }
 
         return $res->withJson(['message' => 'If that email is registered, a sign-in link has been sent.']);
@@ -214,13 +232,18 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
         }
 
+        $redirect = AuthSettings::resolveRedirect($pdo, (int) $project['id'], $body['redirect_url'] ?? null);
+        if ($redirect === false) {
+            return $res->setStatusCode(422)->withJson(['error' => self::REDIRECT_NOT_ALLOWED]);
+        }
+
         if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
             return $limited;
         }
 
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
         if ($user) {
-            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'password_reset', $body['redirect_url'] ?? null, '+30 minutes');
+            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'password_reset', $redirect, '+30 minutes');
         }
 
         return $res->withJson(['message' => 'If that email is registered, a password reset link has been sent.']);
@@ -273,13 +296,18 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email is required']);
         }
 
+        $redirect = AuthSettings::resolveRedirect($pdo, (int) $project['id'], $body['redirect_url'] ?? null);
+        if ($redirect === false) {
+            return $res->setStatusCode(422)->withJson(['error' => self::REDIRECT_NOT_ALLOWED]);
+        }
+
         if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $email)) {
             return $limited;
         }
 
         $user = self::findEndUserByEmail($pdo, $project['id'], $email);
         if ($user && $user['email_verified_at'] === null) {
-            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'email_verification', $body['redirect_url'] ?? null);
+            self::sendPurposeEmail($pdo, $project['id'], $user['id'], $email, 'email_verification', $redirect);
         }
 
         return $res->withJson(['message' => 'If that email is registered and unverified, a confirmation link has been sent.']);
@@ -333,13 +361,18 @@ class EndUsers
             return $res->setStatusCode(409)->withJson(['error' => 'Email already in use']);
         }
 
+        $redirect = AuthSettings::resolveRedirect($pdo, (int) $project['id'], $body['redirect_url'] ?? null);
+        if ($redirect === false) {
+            return $res->setStatusCode(422)->withJson(['error' => self::REDIRECT_NOT_ALLOWED]);
+        }
+
         if ($limited = self::throttleEmail($req, $res, $pdo, (int) $project['id'], $newEmail)) {
             return $limited;
         }
 
         $token = self::issueToken($pdo, $auth['id'], 'email_change', '+30 minutes', $newEmail);
         self::deliverEmail($project['id'], $newEmail, 'email_change', [
-            'link' => self::buildLink($body['redirect_url'] ?? null, $token),
+            'link' => self::buildLink($redirect, $token),
             'new_email' => $newEmail,
         ]);
 
@@ -528,7 +561,7 @@ class EndUsers
         int $endUserId,
         string $email,
         string $purpose,
-        ?string $redirectUrl,
+        string $redirectUrl,
         string $ttl = '+1 day',
     ): void {
         $token = self::issueToken($pdo, $endUserId, $purpose, $ttl);
@@ -578,10 +611,12 @@ class EndUsers
             ->withJson(['error' => 'Too many email requests. Try again later.']);
     }
 
-    /** Builds the link an end user clicks: the developer's own redirect URL plus the raw token. */
-    private static function buildLink(?string $redirectUrl, string $token): string
+    /**
+     * Builds the link an end user clicks: an allowed redirect URL (see
+     * AuthSettings::resolveRedirect()) plus the raw token.
+     */
+    private static function buildLink(string $redirectUrl, string $token): string
     {
-        $redirectUrl ??= env('APP_URL', '');
         $separator = str_contains($redirectUrl, '?') ? '&' : '?';
 
         return "{$redirectUrl}{$separator}token={$token}";

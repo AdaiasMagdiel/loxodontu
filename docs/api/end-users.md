@@ -24,10 +24,29 @@ A project's own app users, separate from platform accounts.
 These flows follow a request/consume pattern: the "request" endpoint always
 responds `200` whether or not the email is registered, so it can never be
 used to enumerate accounts. It issues a single-use, purpose-scoped token and
-emails a link built as `{redirect_url}?token={token}` (falling back to
-`APP_URL` if `redirect_url` is omitted) — the developer's own frontend reads
-`token` from that link and calls the matching "confirm"/"reset"/"consume"
-endpoint.
+emails a link built as `{redirect_url}?token={token}` — the developer's own
+frontend reads `token` from that link and calls the matching
+"confirm"/"reset"/"consume" endpoint.
+
+### Allowed redirect URLs
+
+Because the emailed link carries a live token, `redirect_url` must match the
+project's **Site URL** or one of its **allowed redirect URLs**; anything else
+is rejected with `422`, before any email is sent. Without this, anyone could
+request a password reset for someone else's address with their own site as
+the target and collect the token. When `redirect_url` is omitted, the link
+uses the Site URL (or `APP_URL` if no Site URL is set).
+
+A requested URL matches an entry when the scheme, host and port are identical
+and its path is the entry's path or below it: `https://app.com/auth` allows
+`https://app.com/auth/callback`, but not `https://app.com/authx`,
+`http://app.com/auth` or `https://app.com.evil.net/auth`. There are no
+wildcards. Configure them in the dashboard (**Auth → Settings**) or via:
+
+| Method | Route                              | Auth           | Description |
+| ------ | ---------------------------------- | -------------- | ----------- |
+| GET    | `/projects/{id}/auth/settings`     | platform token | `{ site_url, redirect_urls }` |
+| PUT    | `/projects/{id}/auth/settings`     | platform token | Update either field (`site_url`: URL or `null`; `redirect_urls`: up to 20 absolute http/https URLs) |
 
 Tokens expire quickly: 15 minutes for magic links, 30 minutes for password
 resets and email changes, 1 day for email verification.

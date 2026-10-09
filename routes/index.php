@@ -1,6 +1,7 @@
 <?php
 
 use App\Controllers\Auth;
+use App\Controllers\AuthSettings;
 use App\Controllers\CronJobs;
 use App\Controllers\Dashboard;
 use App\Controllers\EdgeFunctions;
@@ -133,6 +134,10 @@ $app->group('/api', function () use ($app) {
         $app->get('/projects/[project_id]/auth/email-config', [EmailConfig::class, 'show'], [[PlatformAuth::class, 'handle']]);
         $app->put('/projects/[project_id]/auth/email-config', [EmailConfig::class, 'update'], [[PlatformAuth::class, 'handle']]);
         $app->post('/projects/[project_id]/auth/email-config/test', [EmailConfig::class, 'sendTest'], [[PlatformAuth::class, 'handle']]);
+
+        // Auth URL settings (Site URL + allowed redirect URLs for auth emails)
+        $app->get('/projects/[project_id]/auth/settings', [AuthSettings::class, 'show'], [[PlatformAuth::class, 'handle']]);
+        $app->put('/projects/[project_id]/auth/settings', [AuthSettings::class, 'update'], [[PlatformAuth::class, 'handle']]);
 
         $app->get('/projects/[project_id]/auth/templates', [EmailTemplates::class, 'index'], [[PlatformAuth::class, 'handle']]);
         $app->get('/projects/[project_id]/auth/templates/[key]', [EmailTemplates::class, 'show'], [[PlatformAuth::class, 'handle']]);
