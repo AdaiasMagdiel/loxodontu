@@ -7,6 +7,9 @@ use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Crypto;
 use App\Database;
 use App\Mail\MailerFactory;
+use App\Mail\SmtpMailer;
+use App\Net\UrlGuard;
+use RuntimeException;
 use stdClass;
 use Throwable;
 
@@ -67,6 +70,14 @@ class EmailConfig
         $stmt = $pdo->prepare('SELECT * FROM project_email_configs WHERE project_id = ? LIMIT 1');
         $stmt->execute([$project['id']]);
         $existing = $stmt->fetch() ?: [];
+
+        if ($provider === 'smtp' && ($error = self::validateSmtp(
+            $body['smtp_host'] ?? ($existing['smtp_host'] ?? null),
+            $body['smtp_port'] ?? ($existing['smtp_port'] ?? null),
+            $body['smtp_encryption'] ?? ($existing['smtp_encryption'] ?? null),
+        ))) {
+            return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
 
         // A blank secret field means "keep the existing value" — the show()
         // endpoint never returns decrypted secrets for the client to round-trip.
@@ -142,6 +153,34 @@ class EmailConfig
         }
 
         return $res->withJson(['message' => 'Test email sent.']);
+    }
+
+    /**
+     * The SMTP host is tenant-controlled and the server connects to it, so
+     * it must be a public mail server on a mail port — never localhost or an
+     * internal address. DNS is checked again (and pinned) at send time.
+     */
+    private static function validateSmtp(mixed $host, mixed $port, mixed $encryption): ?string
+    {
+        // An incomplete config (no host/port yet) may be saved; it just can't
+        // send until completed — SmtpMailer re-checks everything at send time.
+        if ($host !== null && $host !== '') {
+            try {
+                UrlGuard::assertValidPublicHostSyntax((string) $host);
+            } catch (RuntimeException $e) {
+                return 'smtp_host: ' . $e->getMessage();
+            }
+        }
+
+        if ($port !== null && $port !== '' && (!in_array((int) $port, SmtpMailer::ALLOWED_PORTS, true) || (string) (int) $port !== (string) $port)) {
+            return 'smtp_port must be one of: ' . implode(', ', SmtpMailer::ALLOWED_PORTS);
+        }
+
+        if ($encryption !== null && !in_array($encryption, SmtpMailer::ALLOWED_ENCRYPTION, true)) {
+            return 'smtp_encryption must be one of: ' . implode(', ', SmtpMailer::ALLOWED_ENCRYPTION);
+        }
+
+        return null;
     }
 
     /** @return array<string, mixed> */

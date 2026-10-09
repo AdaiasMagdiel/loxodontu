@@ -35,12 +35,26 @@ class UrlGuard
 
         // parse_url() keeps the brackets of an IPv6 literal ("[::1]").
         $bareHost = trim($host, '[]');
+        $ips = self::assertPublicHost($bareHost);
+        $port = (int) ($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
 
-        if ($bareHost === 'localhost' || str_ends_with($bareHost, '.localhost') || $bareHost === 'localhost.localdomain') {
-            throw new RuntimeException('Localhost requests are not allowed.');
-        }
+        return ['scheme' => $scheme, 'host' => $bareHost, 'port' => $port, 'ips' => $ips];
+    }
 
-        $ips = filter_var($bareHost, FILTER_VALIDATE_IP) ? [$bareHost] : self::resolve($bareHost);
+    /**
+     * Resolves a bare host name (or IP literal) and checks that every
+     * address it maps to is public. Used for non-HTTP outbound connections
+     * too (SMTP), which callers should pin to the returned addresses.
+     *
+     * @return string[] The resolved, validated IPs.
+     * @throws RuntimeException When the host is local, private or unresolvable.
+     */
+    public static function assertPublicHost(string $host): array
+    {
+        $host = strtolower(trim($host, '[] '));
+        self::assertNotLocalhost($host);
+
+        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : self::resolve($host);
 
         if ($ips === []) {
             throw new RuntimeException('Unable to resolve host.');
@@ -52,9 +66,44 @@ class UrlGuard
             }
         }
 
-        $port = (int) ($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
+        return $ips;
+    }
 
-        return ['scheme' => $scheme, 'host' => $bareHost, 'port' => $port, 'ips' => $ips];
+    /**
+     * The checks that need no DNS lookup: syntax, localhost names and
+     * private/reserved IP literals. Suitable for validating a host when it
+     * is saved; assertPublicHost() must still run when connecting.
+     *
+     * @throws RuntimeException
+     */
+    public static function assertValidPublicHostSyntax(string $host): void
+    {
+        $host = strtolower(trim($host));
+
+        if ($host === '' || strlen($host) > 253) {
+            throw new RuntimeException('Host is required.');
+        }
+
+        $literal = trim($host, '[]');
+        if (filter_var($literal, FILTER_VALIDATE_IP)) {
+            if (!self::isPublicIp($literal)) {
+                throw new RuntimeException('Private and reserved network targets are not allowed.');
+            }
+            return;
+        }
+
+        if (!filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) || !str_contains($host, '.')) {
+            throw new RuntimeException('Host must be a valid public host name.');
+        }
+
+        self::assertNotLocalhost($host);
+    }
+
+    private static function assertNotLocalhost(string $host): void
+    {
+        if ($host === 'localhost' || str_ends_with($host, '.localhost') || $host === 'localhost.localdomain') {
+            throw new RuntimeException('Localhost requests are not allowed.');
+        }
     }
 
     public static function isPublicIp(string $ip): bool

@@ -37,6 +37,14 @@ echoed back by `GET`/`PUT`; the response instead reports `has_smtp_password`
 / `has_resend_api_key` booleans. Omitting the secret field on an update
 **keeps the existing value** — send an empty string to clear it.
 
+`smtp_host` must be a public mail server: a host name (or public IP) — never
+`localhost`, a single-label name or a private/reserved address. `smtp_port`
+must be one of `25`, `465`, `587` or `2525`, and `smtp_encryption` one of
+`none`, `ssl`, `tls`. The host is resolved and checked again every time an
+email is sent, and the connection is pinned to the checked address (the TLS
+certificate is still verified against the host name), so it can't be pointed
+at an internal service through DNS either.
+
 `require_email_confirmation` gates end-user login until their email is
 verified — see [End users](end-users.md#requiring-email-confirmation).
 
