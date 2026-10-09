@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Edge {
+namespace App\Net {
     class EdgeHttpCurlMock
     {
         public static mixed $initResult = 'curl-handle';
@@ -45,7 +45,7 @@ namespace App\Edge {
         return true;
     }
 
-    function curl_exec(mixed $handle): string|false
+    function curl_exec(mixed $handle): bool
     {
         if (isset(EdgeHttpCurlMock::$options[\CURLOPT_HEADERFUNCTION])) {
             $header = EdgeHttpCurlMock::$options[\CURLOPT_HEADERFUNCTION];
@@ -53,7 +53,11 @@ namespace App\Edge {
             $header($handle, "X-Test: yes\r\n");
         }
 
-        return EdgeHttpCurlMock::$execResult;
+        if (EdgeHttpCurlMock::$execResult !== false && isset(EdgeHttpCurlMock::$options[\CURLOPT_WRITEFUNCTION])) {
+            (EdgeHttpCurlMock::$options[\CURLOPT_WRITEFUNCTION])($handle, EdgeHttpCurlMock::$execResult);
+        }
+
+        return EdgeHttpCurlMock::$execResult === false ? false : true;
     }
 
     function curl_error(mixed $handle): string
@@ -73,7 +77,7 @@ namespace App\Edge {
 }
 
 namespace {
-    use App\Edge\EdgeHttpCurlMock;
+    use App\Net\EdgeHttpCurlMock;
     use App\Edge\Http;
 
     beforeEach(function () {
@@ -96,10 +100,8 @@ namespace {
     });
 
     test('edge http helper accepts public http and https urls', function () {
-        $method = new ReflectionMethod(Http::class, 'assertAllowedUrl');
-
-        expect($method->invoke(null, 'http://93.184.216.34'))->toBeNull();
-        expect($method->invoke(null, 'https://93.184.216.34'))->toBeNull();
+        expect(App\Net\UrlGuard::assertAllowed('http://93.184.216.34')['port'])->toBe(80);
+        expect(App\Net\UrlGuard::assertAllowed('https://93.184.216.34')['port'])->toBe(443);
     });
 
     test('edge http helper performs get requests through curl', function () {

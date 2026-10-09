@@ -12,6 +12,9 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Security">
+            <directory>tests/Security</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -28,6 +31,7 @@
                 tests, just not line-by-line here.
             -->
             <file>app/Edge/SandboxRunner.php</file>
+            <file>app/Edge/Bridge.php</file>
             <file>app/Edge/Db.php</file>
             <file>app/Edge/DbQuery.php</file>
             <file>app/Edge/DbResult.php</file>

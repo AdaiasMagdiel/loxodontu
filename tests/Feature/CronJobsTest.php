@@ -99,7 +99,7 @@ test('rejects specific invalid cron job fields', function (array $payload, strin
 ]);
 
 test('updates and deletes cron jobs', function () {
-    $owner = registerPlatformUser();
+    $owner = registerPlatformAdmin();
     $project = createProject($owner['token']);
 
     $created = api()->post("/api/v1/projects/{$project['id']}/cron-jobs", [
@@ -164,7 +164,7 @@ test('updates and deletes cron jobs', function () {
 });
 
 test('cron job endpoints return not found and empty update errors', function () {
-    $owner = registerPlatformUser();
+    $owner = registerPlatformAdmin();
     $project = createProject($owner['token']);
 
     $created = api()->post("/api/v1/projects/{$project['id']}/cron-jobs", [
@@ -206,7 +206,7 @@ test('cron job endpoints return not found and empty update errors', function () 
 });
 
 test('runs due callback jobs and stores run history', function () {
-    $owner = registerPlatformUser();
+    $owner = registerPlatformAdmin();
     $project = createProject($owner['token']);
 
     $created = api()->post("/api/v1/projects/{$project['id']}/cron-jobs", [
@@ -249,7 +249,7 @@ test('runs due callback jobs and stores run history', function () {
 });
 
 test('failed jobs retry until max retries is exceeded', function () {
-    $owner = registerPlatformUser();
+    $owner = registerPlatformAdmin();
     $project = createProject($owner['token']);
 
     $created = api()->post("/api/v1/projects/{$project['id']}/cron-jobs", [

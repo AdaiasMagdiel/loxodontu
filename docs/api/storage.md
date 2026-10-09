@@ -3,8 +3,8 @@
 Storage organizes files into per-project **buckets**. Each object's metadata (path, size,
 mime type, owner) is a row in `project_storage_objects`; the binary content is written to
 local disk. Access control reuses the same RLS engine as [table RLS](keys-and-rls.md) —
-buckets get **storage policies** with the same `operation` / `expression` shape (a raw SQL
-boolean expression, see [keys-and-rls.md](keys-and-rls.md#expression-real-sql-not-a-condition-dsl)
+buckets get **storage policies** with the same `operation` / `expression` shape (a restricted SQL
+boolean expression, see [keys-and-rls.md](keys-and-rls.md#expression-a-restricted-sql-boolean-expression)
 for the full model), just scoped to a bucket instead of a table.
 
 ## Management (platform owner)
@@ -79,6 +79,17 @@ with no authentication at all — no key, no RLS check. Everything else (listing
 authenticated download, rename, delete) still goes through the usual key + policy gate
 regardless of a bucket's `public` flag. Marking a bucket public only opens up serving its
 files publicly, the way you'd point an `<img>` tag or a CDN at it.
+
+## Content types and how files are served
+
+An object's `mime_type` is detected from the file's contents when it is uploaded — the
+`Content-Type` the client sends for the multipart part is ignored. Downloads are served:
+
+- `inline` only for passive media — common image formats (not SVG), audio, video, PDF and
+  plain text — so `<img>`/`<video>` tags and browser previews keep working;
+- as an `attachment` for everything else, including HTML and SVG;
+- always with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`,
+  so an uploaded file can never run script in your Loxodontu origin.
 
 ## Storage location
 

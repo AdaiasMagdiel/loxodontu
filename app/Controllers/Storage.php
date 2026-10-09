@@ -11,6 +11,7 @@ use App\Database;
 use App\Pagination;
 use App\Rls\PolicyEngine;
 use App\Storage\LocalDisk;
+use App\Storage\ObjectResponse;
 use PDO;
 use stdClass;
 
@@ -32,7 +33,7 @@ class Storage
         'delete' => 'storage:delete',
     ];
 
-    private const OBJECT_COLUMNS = ['id', 'bucket_id', 'path', 'owner_id', 'size', 'mime_type', 'created_at', 'updated_at'];
+    public const OBJECT_COLUMNS = ['id', 'bucket_id', 'path', 'owner_id', 'size', 'mime_type', 'created_at', 'updated_at'];
 
     /** GET /[project_id]/storage/public/[bucket]/[object_id] — no auth, bucket must be public. */
     public static function publicDownload(ErlRequest $req, ErlResponse $res, stdClass $params): ErlResponse
@@ -118,7 +119,7 @@ class Storage
                 'path'      => $path,
                 'owner_id'  => $auth['id'] ?? null, // an uploaded object's owner is always the uploader, never client-chosen
                 'size'      => (int) $file['size'],
-                'mime_type' => $file['type'] ?? null,
+                'mime_type' => ObjectResponse::detectMimeType($file['tmp_name']),
             ];
 
             [$sql, $sqlParams] = QueryBuilder::insert('project_storage_objects', $data);
@@ -284,7 +285,7 @@ class Storage
         $stmt->execute([$bucket['id']]);
         $policies = $stmt->fetchAll();
 
-        $policyConditions = PolicyEngine::resolve($policies, $auth);
+        $policyConditions = PolicyEngine::resolve($policies, $auth, self::OBJECT_COLUMNS);
 
         return $handler($pdo, $bucket, $policyConditions, $auth);
     }
@@ -321,14 +322,7 @@ class Storage
             return $res->setStatusCode(404)->withJson(['error' => 'Resource not found']);
         }
 
-        $response = $res->withFile($diskPath);
-        $response->setHeader('Content-Disposition', 'inline; filename="' . basename($object['path']) . '"');
-
-        if (!empty($object['mime_type'])) {
-            $response->setContentType($object['mime_type']);
-        }
-
-        return $response;
+        return ObjectResponse::send($res, $diskPath, $object);
     }
 
     private static function findBucket(PDO $pdo, int $projectId, string $name): array|false

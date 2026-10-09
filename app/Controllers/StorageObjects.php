@@ -7,6 +7,7 @@ use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
 use App\Pagination;
 use App\Storage\LocalDisk;
+use App\Storage\ObjectResponse;
 use stdClass;
 
 /**
@@ -81,7 +82,7 @@ class StorageObjects
 
         $pdo->prepare(
             'INSERT INTO project_storage_objects (bucket_id, path, owner_id, size, mime_type) VALUES (?, ?, NULL, ?, ?)'
-        )->execute([$bucket['id'], $path, (int) $file['size'], $file['type'] ?? null]);
+        )->execute([$bucket['id'], $path, (int) $file['size'], ObjectResponse::detectMimeType($file['tmp_name'])]);
         $objectId = (int) $pdo->lastInsertId();
 
         LocalDisk::put((int) $bucket['project_id'], (int) $bucket['id'], $objectId, $file['tmp_name']);
@@ -115,14 +116,7 @@ class StorageObjects
             return $res->setStatusCode(404)->withJson(['error' => 'Object not found']);
         }
 
-        $response = $res->withFile($diskPath);
-        $response->setHeader('Content-Disposition', 'inline; filename="' . basename($object['path']) . '"');
-
-        if (!empty($object['mime_type'])) {
-            $response->setContentType($object['mime_type']);
-        }
-
-        return $response;
+        return ObjectResponse::send($res, $diskPath, $object);
     }
 
     public static function destroy(Request $req, Response $res, stdClass $params): Response

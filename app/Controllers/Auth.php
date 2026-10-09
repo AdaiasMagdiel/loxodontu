@@ -5,6 +5,7 @@ namespace App\Controllers;
 use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
+use App\Security\LoginThrottle;
 use stdClass;
 
 class Auth
@@ -48,7 +49,7 @@ class Auth
 
         return $res->setStatusCode(201)->withJson([
             'token' => $token,
-            'user'  => ['id' => $userId, 'name' => $name, 'email' => $email],
+            'user'  => ['id' => $userId, 'name' => $name, 'email' => $email, 'is_admin' => false],
         ]);
     }
 
@@ -63,27 +64,38 @@ class Auth
             return $res->setStatusCode(422)->withJson(['error' => 'email and password are required']);
         }
 
-        $pdo  = Database::getConn('default');
-        $stmt = $pdo->prepare('SELECT id, name, email, password FROM users WHERE email = ? LIMIT 1');
+        $pdo      = Database::getConn('default');
+        $throttle = new LoginThrottle($pdo, 'platform');
+        $ip       = $req->getIp();
+
+        if ($retryAfter = $throttle->retryAfter($email, $ip)) {
+            return $res->setStatusCode(429)
+                ->setHeader('Retry-After', (string) $retryAfter)
+                ->withJson(['error' => 'Too many login attempts. Try again later.']);
+        }
+
+        $stmt = $pdo->prepare('SELECT id, name, email, password, is_admin FROM users WHERE email = ? LIMIT 1');
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if (!$user || !password_verify($password, $user['password'])) {
+            $throttle->failed($email, $ip);
             return $res->setStatusCode(401)->withJson(['error' => 'Invalid credentials']);
         }
 
+        $throttle->succeeded($email, $ip);
         $token = self::issueToken($pdo, $user['id']);
 
         return $res->withJson([
             'token' => $token,
-            'user'  => ['id' => $user['id'], 'name' => $user['name'], 'email' => $user['email']],
+            'user'  => ['id' => $user['id'], 'name' => $user['name'], 'email' => $user['email'], 'is_admin' => (bool) $user['is_admin']],
         ]);
     }
 
     public static function me(Request $req, Response $res, stdClass $params): Response
     {
         $u = $params->user;
-        return $res->withJson(['id' => $u['id'], 'name' => $u['name'], 'email' => $u['email']]);
+        return $res->withJson(['id' => $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'is_admin' => $u['is_admin']]);
     }
 
     public static function updateAccount(Request $req, Response $res, stdClass $params): Response

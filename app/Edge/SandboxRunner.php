@@ -4,6 +4,7 @@ use App\Edge\Db;
 use App\Edge\FunctionRequest;
 use App\Edge\FunctionResponse;
 
+require_once __DIR__ . '/Bridge.php';
 require_once __DIR__ . '/FunctionRequest.php';
 require_once __DIR__ . '/FunctionResponse.php';
 require_once __DIR__ . '/Http.php';
@@ -25,6 +26,8 @@ if ($codePath === '' || !is_file($codePath)) {
 }
 
 $requestData = $input['request'] ?? [];
+
+\App\Edge\Bridge::open();
 
 try {
     $db = new Db();

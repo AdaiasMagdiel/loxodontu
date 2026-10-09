@@ -6,6 +6,7 @@ use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
 use App\Pagination;
+use App\Rls\ExpressionValidator;
 use stdClass;
 
 class StoragePolicies
@@ -71,7 +72,7 @@ class StoragePolicies
             ]);
         }
 
-        if ($error = RlsPolicies::validateExpression($expression)) {
+        if ($error = ExpressionValidator::validate($expression, Storage::OBJECT_COLUMNS)) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
         }
 

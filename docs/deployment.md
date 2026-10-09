@@ -59,8 +59,8 @@ your host, or check what `php -v` resolves to over SSH) if edge functions fail t
 
 **Cron.** Shared hosts typically let you schedule exactly one file or one URL — not a
 long-running worker. Loxodontu's [cron jobs](cron-jobs.md) are designed around that: point the
-host's cron scheduler at `worker.php`, either as a CLI command or a URL hit, and set
-`CRON_WORKER_TOKEN` if the URL is reachable from the public internet.
+host's cron scheduler at `worker.php`, either as a CLI command or a URL hit. The URL form only
+works once `CRON_WORKER_TOKEN` is set (send it as an `X-Cron-Token` header when your host allows it).
 
 **`command`-type cron jobs are disabled by default** (`CRON_ALLOW_COMMANDS=false`) because they
 execute arbitrary shell commands on the host under the web server's user. Only enable this if you

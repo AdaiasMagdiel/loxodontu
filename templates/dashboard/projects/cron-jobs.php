@@ -57,8 +57,8 @@ ob_start();
                         <select v-model="form.type" class="input mt-1">
                             <option value="http">HTTP</option>
                             <option value="function">Function</option>
-                            <option value="callback">Callback</option>
-                            <option value="command">Command</option>
+                            <option v-if="isAdmin || form.type === 'callback'" value="callback">Callback</option>
+                            <option v-if="isAdmin || form.type === 'command'" value="command">Command</option>
                         </select>
                     </label>
                     <label v-if="form.type === 'http'" class="field-label">Method<input v-model="form.method" class="input mt-1 font-mono" /></label>
@@ -199,7 +199,8 @@ ob_start();
             loadFunctions();
             loadJobs();
 
-            return { PROJECT_ID, project, jobs, functions, loading, modal, runsFor, runs, form, formatDate, openCreate, editJob, saveJob, deleteJob, loadRuns };
+            const isAdmin = !!(store.auth.user && store.auth.user.is_admin);
+            return { PROJECT_ID, isAdmin, project, jobs, functions, loading, modal, runsFor, runs, form, formatDate, openCreate, editJob, saveJob, deleteJob, loadRuns };
         }
     });
 </script>

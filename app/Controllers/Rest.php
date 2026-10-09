@@ -156,7 +156,7 @@ class Rest
         $stmt->execute([$projectTable['id']]);
         $rlsPolicies = $stmt->fetchAll();
 
-        $policyConditions = PolicyEngine::resolve($rlsPolicies, $auth);
+        $policyConditions = PolicyEngine::resolve($rlsPolicies, $auth, $columns);
 
         $physicalTable = Tables::physicalName($projectId, $table);
         $resource      = (new Resource($physicalTable))->columns($columns);

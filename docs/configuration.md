@@ -35,7 +35,7 @@ still requires running migrations (see [Getting Started](getting-started.md)).
 
 | Variable | Default | Description |
 | -------- | ------- | ------------ |
-| `CRON_WORKER_TOKEN` | — | Optional shared secret required by `worker.php` (as `?token=` or `--token=`). Set this in production whenever `worker.php` is reachable from the web. |
+| `CRON_WORKER_TOKEN` | — | Shared secret for `worker.php`. Required for HTTP invocation (send it as the `X-Cron-Token` header, or `?token=` as a fallback); checked from the CLI (`--token=`) only when set. |
 | `CRON_WORKER_LIMIT` | `10` | How many due jobs a single worker invocation claims and executes before returning. Keep this small on shared hosting so each cron hit finishes quickly. |
 | `CRON_ALLOW_COMMANDS` | `false` | Must be the literal string `true` to allow `command`-type cron jobs, which execute shell commands on the host. Leave disabled unless you trust every job creator. |
 

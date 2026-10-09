@@ -2,6 +2,9 @@
 
 namespace App\Cron;
 
+use App\Net\SafeHttpClient;
+use RuntimeException;
+
 class HttpJobHandler implements JobHandler
 {
     /** @param array<string, mixed> $job */
@@ -12,47 +15,27 @@ class HttpJobHandler implements JobHandler
         $headers = is_array($headers) ? $headers : [];
         $payload = $job['payload'] ?? null;
 
-        $headerLines = [];
-        foreach ($headers as $name => $value) {
-            if (is_string($name) && is_scalar($value)) {
-                $headerLines[] = "{$name}: {$value}";
-            }
+        try {
+            $response = SafeHttpClient::request(
+                $method,
+                (string) $job['target'],
+                $payload === null ? null : (string) $payload,
+                $headers,
+                (int) ($job['timeout_seconds'] ?? 30),
+            );
+        } catch (RuntimeException $e) {
+            return JobResult::failure('HTTP request blocked: ' . $e->getMessage());
         }
 
-        $context = stream_context_create([
-            'http' => [
-                'method' => $method,
-                'header' => implode("\r\n", $headerLines),
-                'content' => in_array($method, ['GET', 'HEAD'], true) ? null : (string) $payload,
-                'timeout' => max(1, (int) ($job['timeout_seconds'] ?? 30)),
-                'ignore_errors' => true,
-            ],
-        ]);
-
-        $output = @file_get_contents((string) $job['target'], false, $context);
-        $statusCode = $this->statusCode($http_response_header ?? []);
-
-        if ($output === false) {
+        if ($response['error'] !== null && $response['status'] === 0) {
             return JobResult::failure('HTTP request failed before a response was received.');
         }
 
-        if ($statusCode < 200 || $statusCode >= 300) {
-            return JobResult::failure("HTTP request returned status {$statusCode}.", $this->truncate($output));
+        if (!$response['ok']) {
+            return JobResult::failure("HTTP request returned status {$response['status']}.", $this->truncate($response['body']));
         }
 
-        return JobResult::success($this->truncate($output));
-    }
-
-    /** @param string[] $headers */
-    private function statusCode(array $headers): int
-    {
-        foreach ($headers as $header) {
-            if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header, $matches)) {
-                return (int) $matches[1];
-            }
-        }
-
-        return 0;
+        return JobResult::success($this->truncate($response['body']));
     }
 
     private function truncate(string $value): string

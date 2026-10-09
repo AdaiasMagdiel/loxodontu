@@ -12,6 +12,12 @@ use stdClass;
 class CronJobs
 {
     private const TYPES = ['http', 'command', 'callback', 'function'];
+
+    /** Job types that run arbitrary server-side code — platform admins only. */
+    public const PRIVILEGED_TYPES = ['command', 'callback'];
+
+    private const ADMIN_ONLY_ERROR = 'Only platform administrators can manage command and callback jobs';
+
     private const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
     private const RETRY_BACKOFFS = ['fixed', 'exponential'];
 
@@ -56,6 +62,10 @@ class CronJobs
         $error = self::validate($body);
         if ($error) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if (self::requiresAdmin($body['type'], $params->user)) {
+            return $res->setStatusCode(403)->withJson(['error' => self::ADMIN_ONLY_ERROR]);
         }
 
         $name = trim($body['name']);
@@ -139,6 +149,10 @@ class CronJobs
         $error = self::validate($candidate);
         if ($error) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if (self::requiresAdmin($candidate['type'], $params->user)) {
+            return $res->setStatusCode(403)->withJson(['error' => self::ADMIN_ONLY_ERROR]);
         }
 
         $fields = [];
@@ -252,6 +266,12 @@ class CronJobs
             }, $stmt->fetchAll()));
     }
 
+    /** @param array{is_admin: bool} $user */
+    private static function requiresAdmin(string $type, array $user): bool
+    {
+        return in_array($type, self::PRIVILEGED_TYPES, true) && !$user['is_admin'];
+    }
+
     /** @param array<string, mixed> $body */
     private static function validate(array $body): ?string
     {
@@ -276,8 +296,9 @@ class CronJobs
             if (!in_array($method, self::METHODS, true)) {
                 return 'method must be one of: ' . implode(', ', self::METHODS);
             }
-            if (!filter_var($body['target'], FILTER_VALIDATE_URL)) {
-                return 'target must be a valid URL for http jobs';
+            $scheme = strtolower((string) parse_url((string) $body['target'], PHP_URL_SCHEME));
+            if (!filter_var($body['target'], FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) {
+                return 'target must be a valid http or https URL for http jobs';
             }
         }
 

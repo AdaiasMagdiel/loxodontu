@@ -56,7 +56,7 @@ test('command jobs capture non-zero exits', function () {
     expect($result->output)->toContain('bad');
 });
 
-test('http jobs report requests that never receive a response', function () {
+test('http jobs refuse non-http targets', function () {
     $result = (new HttpJobHandler())->handle([
         'method' => 'GET',
         'headers' => 'not-json',
@@ -66,7 +66,7 @@ test('http jobs report requests that never receive a response', function () {
     ]);
 
     expect($result->ok)->toBeFalse();
-    expect($result->error)->toBe('HTTP request returned status 0.');
+    expect($result->error)->toBe('HTTP request blocked: Only http and https URLs are allowed.');
 });
 
 test('cron job schedule inserts a job and returns its id', function () {

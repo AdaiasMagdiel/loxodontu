@@ -14,6 +14,8 @@ class EdgeFunctions
 {
     private const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
+    private const ADMIN_ONLY_ERROR = 'Only platform administrators can use class-based function handlers';
+
     public static function index(Request $req, Response $res, stdClass $params): Response
     {
         $pdo = Database::getConn('default');
@@ -51,6 +53,10 @@ class EdgeFunctions
         $error = self::validate($body);
         if ($error) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if (self::setsHandler($body) && !$params->user['is_admin']) {
+            return $res->setStatusCode(403)->withJson(['error' => self::ADMIN_ONLY_ERROR]);
         }
 
         $slug = self::slug($body['slug']);
@@ -124,6 +130,10 @@ class EdgeFunctions
         $error = self::validate($candidate);
         if ($error) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
+        }
+
+        if (self::setsHandler($body) && !$params->user['is_admin']) {
+            return $res->setStatusCode(403)->withJson(['error' => self::ADMIN_ONLY_ERROR]);
         }
 
         $fields = [];
@@ -228,6 +238,17 @@ class EdgeFunctions
         }
 
         return $response->withJson($result->body);
+    }
+
+    /**
+     * A `handler` (ClassName::method) runs any autoloadable PHP code in the
+     * main process, outside the sandbox — platform admins only.
+     *
+     * @param array<string, mixed> $body
+     */
+    private static function setsHandler(array $body): bool
+    {
+        return trim((string) ($body['handler'] ?? '')) !== '';
     }
 
     /** @param array<string, mixed> $body */

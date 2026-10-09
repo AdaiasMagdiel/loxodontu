@@ -23,6 +23,25 @@ systems can trigger the same file more than once, and the lock prevents duplicat
 `allow_overlap` is enabled. Every execution is stored in `cron_job_runs` with status, duration,
 output, error, attempt number, and worker id.
 
+### Who can use each type
+
+`http` and `function` jobs are available to every project owner. `command` and `callback` jobs run
+arbitrary code on the server, so only **platform administrators** can create, update or run them —
+the API answers `403` for anyone else, and the worker re-checks it before every run (a job whose
+owner is not an administrator fails instead of executing). Promote an account directly in the
+database; there is deliberately no API for it:
+
+```sql
+UPDATE users SET is_admin = 1 WHERE email = 'you@example.com';
+```
+
+### HTTP job targets
+
+`http` targets must be `http://` or `https://` URLs pointing at a **public** address. Requests to
+localhost, private and reserved ranges (`10.0.0.0/8`, `192.168.0.0/16`, `169.254.169.254`, `::1`,
+…) are refused at run time, the connection is pinned to the address that was checked (no DNS
+rebinding), redirects are not followed and the stored response is capped.
+
 Platform-authenticated API endpoints:
 
 | Method | Route                                      | Description                  |
@@ -79,7 +98,7 @@ curl -X POST "$APP_URL/api/v1/projects/1/cron-jobs" \
 }
 ```
 
-The callback must be autoloadable and callable. It receives the decoded payload and the job row:
+Callback jobs require a platform administrator (see above). The callback must be autoloadable and callable. It receives the decoded payload and the job row:
 
 ```php
 <?php
@@ -123,10 +142,15 @@ php worker.php --token="$CRON_WORKER_TOKEN" --limit=10
 php worker.php --token="$CRON_WORKER_TOKEN" --queue=maintenance --limit=5
 ```
 
-Or configure a shared-hosting cron entry to call the public URL:
+Or configure a shared-hosting cron entry to call the public URL. Prefer sending the token in the
+`X-Cron-Token` header; `?token=` is accepted for web-cron services that can only call a plain URL,
+but query strings tend to end up in access logs:
+
+```bash
+curl -H "X-Cron-Token: $CRON_WORKER_TOKEN" "https://example.com/worker.php?limit=10"
+```
 
 ```text
-https://example.com/worker.php?token=YOUR_TOKEN&limit=10
 https://example.com/worker.php?token=YOUR_TOKEN&queue=maintenance&limit=5
 ```
 
@@ -138,8 +162,10 @@ CRON_WORKER_LIMIT=10
 CRON_ALLOW_COMMANDS=false
 ```
 
-`CRON_WORKER_TOKEN` is optional, but should be set in production if `worker.php` is reachable from
-the web. `CRON_WORKER_LIMIT` controls how many due jobs a single worker invocation may claim and
-execute before returning; keep it small on shared hosting so each cron request finishes quickly.
+Over HTTP the worker refuses to run until `CRON_WORKER_TOKEN` is set. From the CLI the token is
+checked only when one is configured (anyone who can run the CLI can already read `.env`).
+`CRON_WORKER_LIMIT` controls how many due jobs a single worker invocation may claim and
+execute before returning (capped at 100); keep it small on shared hosting so each cron request finishes quickly.
 `command` jobs are disabled by default because they execute shell commands on the host; enable them
-only in trusted deployments with `CRON_ALLOW_COMMANDS=true`.
+only in trusted deployments with `CRON_ALLOW_COMMANDS=true` — and even then only platform
+administrators can create them.

@@ -21,7 +21,7 @@ class PlatformAuth
         $pdo  = Database::getConn('default');
 
         $stmt = $pdo->prepare(
-            'SELECT u.id, u.name, u.email
+            'SELECT u.id, u.name, u.email, u.is_admin
              FROM platform_auth_tokens t
              JOIN users u ON u.id = t.user_id
              WHERE t.token_hash = ? AND t.expires_at > NOW()
@@ -35,6 +35,7 @@ class PlatformAuth
             return;
         }
 
+        $user['is_admin'] = (bool) $user['is_admin'];
         $params->user = $user;
         $next($req, $res, $params);
     }

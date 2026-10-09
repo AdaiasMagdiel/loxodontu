@@ -6,6 +6,7 @@ use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
 use App\Pagination;
+use App\Security\LoginThrottle;
 use stdClass;
 
 /**
@@ -83,6 +84,15 @@ class EndUsers
             return $res->setStatusCode(422)->withJson(['error' => 'email and password are required']);
         }
 
+        $throttle = new LoginThrottle($pdo, "project:{$project['id']}");
+        $ip       = $req->getIp();
+
+        if ($retryAfter = $throttle->retryAfter($email, $ip)) {
+            return $res->setStatusCode(429)
+                ->setHeader('Retry-After', (string) $retryAfter)
+                ->withJson(['error' => 'Too many login attempts. Try again later.']);
+        }
+
         $stmt = $pdo->prepare(
             'SELECT id, email, password, role FROM project_end_users WHERE project_id = ? AND email = ? LIMIT 1'
         );
@@ -90,9 +100,11 @@ class EndUsers
         $user = $stmt->fetch();
 
         if (!$user || !password_verify($password, $user['password'])) {
+            $throttle->failed($email, $ip);
             return $res->setStatusCode(401)->withJson(['error' => 'Invalid credentials']);
         }
 
+        $throttle->succeeded($email, $ip);
         $token = self::issueToken($pdo, $user['id']);
 
         return $res->withJson([

@@ -103,7 +103,7 @@ ob_start();
                             </div>
                             <textarea v-model="ui(bucket.id).newPolicy.expression" rows="2" class="input mt-2 font-mono" placeholder="owner_id = $auth.id"></textarea>
                             <p class="text-xs mt-1" style="color:var(--text-muted);">
-                                Raw SQL boolean expression over an object's columns
+                                SQL boolean expression using only an object's columns, literals and basic functions (no subqueries)
                                 (<span class="font-mono">id, bucket_id, path, owner_id, size, mime_type, created_at, updated_at</span>).
                                 Placeholders: <code v-for="ph in authPlaceholders" :key="ph" class="font-mono mr-1" style="color:var(--accent);">{{ ph }}</code>
                                 — applies only to the passthrough API (<span class="font-mono">storage:*</span> keys / end users), never to this dashboard.

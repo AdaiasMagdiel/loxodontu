@@ -88,9 +88,11 @@ class CronJobRunner
 
         try {
             $handler = $this->handlers[$job['type']] ?? null;
-            $result = $handler
-                ? $handler->handle($job)
-                : JobResult::failure("Unsupported job type: {$job['type']}");
+            $result = match (true) {
+                $handler === null => JobResult::failure("Unsupported job type: {$job['type']}"),
+                !$this->ownerMayRun($job) => JobResult::failure('Command and callback jobs can only be run for projects owned by a platform administrator.'),
+                default => $handler->handle($job),
+            };
         } catch (Throwable $e) {
             $result = JobResult::failure($e->getMessage());
         }
@@ -100,6 +102,27 @@ class CronJobRunner
         $this->reschedule($job, $result);
 
         return $result;
+    }
+
+    /**
+     * Re-checked at run time, not only when the job is created: a job saved
+     * before the admin-only rule existed, or whose owner has since lost
+     * admin rights, must not keep running arbitrary code.
+     *
+     * @param array<string, mixed> $job
+     */
+    private function ownerMayRun(array $job): bool
+    {
+        if (!in_array($job['type'], ['command', 'callback'], true)) {
+            return true;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT u.is_admin FROM projects p INNER JOIN users u ON u.id = p.user_id WHERE p.id = ? LIMIT 1'
+        );
+        $stmt->execute([$job['project_id']]);
+
+        return (bool) $stmt->fetchColumn();
     }
 
     /** @param array<string, mixed> $job */

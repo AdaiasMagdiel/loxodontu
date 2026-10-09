@@ -12,11 +12,24 @@
 `permissions` is a subset of `select`, `insert`, `update`, `delete`. `operation` is one of `SELECT`,
 `INSERT`, `UPDATE`, `DELETE`, `ALL`.
 
-## `expression`: real SQL, not a condition DSL
+## `expression`: a restricted SQL boolean expression
 
-`expression` is a raw SQL boolean expression evaluated against the table's own columns —
-`OR`, `IN (...)`, comparisons between columns, whatever your database's `WHERE` clause
-accepts.
+`expression` is a SQL boolean expression evaluated against the table's own columns — `AND`/`OR`/`NOT`,
+`IN (...)`, `LIKE`, `BETWEEN`, `IS [NOT] NULL`, `CASE`, comparisons between columns and literals.
+
+Because policies run against the shared database, an expression may only use:
+
+- the **columns of its own table** (plain or backtick-quoted names — no `table.column`);
+- the `$auth.id` / `$auth.email` / `$auth.role` placeholders (below);
+- string and number literals, operators and parentheses;
+- a fixed set of pure functions: `LOWER`, `UPPER`, `TRIM`, `LENGTH`, `CHAR_LENGTH`, `CONCAT`,
+  `SUBSTRING`, `LEFT`, `RIGHT`, `LOCATE`, `REPLACE`, `FIND_IN_SET`, `COALESCE`, `IFNULL`, `NULLIF`,
+  `IF`, `GREATEST`, `LEAST`, `ABS`, `ROUND`, `FLOOR`, `CEIL`, `NOW`, `CURDATE`, `UTC_TIMESTAMP`,
+  `DATE`, `DATE_ADD`, `DATE_SUB`, `DATEDIFF`, `TIMESTAMPDIFF`, `JSON_CONTAINS`, `JSON_EXTRACT`,
+  `JSON_UNQUOTE`, `JSON_LENGTH` (and a few aliases), plus `INTERVAL n DAY`-style intervals.
+
+Subqueries, other tables, `@variables`, comments, `;` and any other function are rejected with a
+`422` that names the offending part.
 
 ### `$auth.id` / `$auth.email` / `$auth.role`
 
@@ -61,9 +74,7 @@ caller/row simply filters it out, rather than returning an error.
   mind: a client must supply values that already satisfy the policy, the same way a real
   Postgres `WITH CHECK` constraint works.
 
-Since policies are written by the platform owner via this management API — the same
-person who already has unrestricted raw SQL access through the SQL Editor — `expression`
-is trusted the same way: not parsed or whitelisted beyond a few cheap guardrails (must be
-non-empty, under 10,000 characters, no `;`/`--`/`/*`, and only the three documented
-`$auth.*` placeholders), which exist to catch mistakes with a friendly `422`, not to
-sandbox untrusted input.
+Expressions are validated when a policy is created **and again every time it is applied**. A stored
+policy that no longer passes validation (for example one created before these rules existed, or one
+that references a column that was later renamed) fails closed: it matches no rows instead of being
+run.

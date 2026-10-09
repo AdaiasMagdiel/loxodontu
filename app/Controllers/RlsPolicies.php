@@ -6,13 +6,12 @@ use AdaiasMagdiel\Erlenmeyer\Request;
 use AdaiasMagdiel\Erlenmeyer\Response;
 use App\Database;
 use App\Pagination;
+use App\Rls\ExpressionValidator;
 use stdClass;
 
 class RlsPolicies
 {
     private const VALID_OPERATIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'];
-    private const MAX_EXPRESSION_LENGTH = 10000;
-    private const VALID_PLACEHOLDERS = ['id', 'email', 'role'];
 
     public static function index(Request $req, Response $res, stdClass $params): Response
     {
@@ -73,7 +72,7 @@ class RlsPolicies
             ]);
         }
 
-        if ($error = self::validateExpression($expression)) {
+        if ($error = ExpressionValidator::validate($expression, self::tableColumns($pdo, (int) $table['id']))) {
             return $res->setStatusCode(422)->withJson(['error' => $error]);
         }
 
@@ -116,34 +115,18 @@ class RlsPolicies
     }
 
     /**
-     * Cheap guardrails, not a security boundary (the author is a platform
-     * owner who already has unrestricted SQL access via the SQL Editor) —
-     * these just turn common mistakes into a friendly 422 instead of a
-     * confusing runtime SQL error.
+     * The columns a policy on this table may reference — the same list
+     * Rest::scopedApi() exposes (and re-validates against at request time).
+     *
+     * @return string[]
      */
-    public static function validateExpression(string $expression): ?string
+    private static function tableColumns(\PDO $pdo, int $tableId): array
     {
-        if ($expression === '') {
-            return 'expression is required';
-        }
+        $stmt = $pdo->prepare('SELECT name FROM project_columns WHERE table_id = ?');
+        $stmt->execute([$tableId]);
+        $columns = $stmt->fetchAll(\PDO::FETCH_COLUMN);
 
-        if (strlen($expression) > self::MAX_EXPRESSION_LENGTH) {
-            return 'expression is too long (max ' . self::MAX_EXPRESSION_LENGTH . ' characters)';
-        }
-
-        if (preg_match('/;|--|\/\*/', $expression)) {
-            return 'expression must be a single boolean expression: ";", "--" and "/*" are not allowed';
-        }
-
-        if (preg_match_all('/\$auth\.(\w+)/', $expression, $matches)) {
-            foreach ($matches[1] as $name) {
-                if (!in_array($name, self::VALID_PLACEHOLDERS, true)) {
-                    return "unknown placeholder \$auth.{$name}; use one of: " . implode(', ', array_map(fn($p) => "\$auth.{$p}", self::VALID_PLACEHOLDERS));
-                }
-            }
-        }
-
-        return null;
+        return in_array('id', $columns, true) ? $columns : ['id', ...$columns];
     }
 
     private static function findOwnedTable(\PDO $pdo, mixed $publicProjectId, mixed $tableId, int $userId): array|false

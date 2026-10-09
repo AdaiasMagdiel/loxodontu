@@ -24,11 +24,17 @@ class PolicyEngine
     private const PLACEHOLDERS = ['id', 'email', 'role'];
 
     /**
+     * Every expression is re-validated against ExpressionValidator before
+     * use: a stored policy that doesn't pass (e.g. one written before the
+     * restricted grammar existed) fails closed — it becomes `1 = 0` and
+     * matches nothing — rather than being interpolated into the query.
+     *
      * @param array<int, array{operation: string, expression: string}> $policies
      * @param array{id: int, email: string, role: ?string}|null $auth
+     * @param string[] $columns Columns of the table the policies apply to.
      * @return array<string, ?RawCondition> Keyed by 'select'|'insert'|'update'|'delete'.
      */
-    public static function resolve(array $policies, ?array $auth): array
+    public static function resolve(array $policies, ?array $auth, array $columns): array
     {
         $byOperation = ['select' => [], 'insert' => [], 'update' => [], 'delete' => []];
 
@@ -55,6 +61,11 @@ class PolicyEngine
             $params = [];
 
             foreach ($opPolicies as $i => $policy) {
+                if (ExpressionValidator::validate($policy['expression'], $columns) !== null) {
+                    $clauses[] = '(1 = 0)';
+                    continue;
+                }
+
                 [$sql, $policyParams] = self::bindPlaceholders($policy['expression'], $auth, $i);
                 $clauses[] = "({$sql})";
                 $params += $policyParams;

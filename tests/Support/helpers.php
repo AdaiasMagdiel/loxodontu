@@ -217,3 +217,21 @@ function bootstrapProjectWithTable(array $columns, ?string $tableName = null): a
         'apiKey'     => $key['key'],
     ];
 }
+
+/**
+ * Registers a platform user and promotes them to platform administrator —
+ * the only kind of account allowed to manage command/callback cron jobs and
+ * class-based edge function handlers.
+ *
+ * @return array{token: string, user: array{id: int, name: string, email: string}}
+ */
+function registerPlatformAdmin(?string $email = null, string $password = 'password123'): array
+{
+    $registered = registerPlatformUser($email, $password);
+
+    App\Database::getConn('default')
+        ->prepare('UPDATE users SET is_admin = 1 WHERE id = ?')
+        ->execute([$registered['user']['id']]);
+
+    return $registered;
+}

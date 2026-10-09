@@ -212,7 +212,7 @@ PHP;
     expect($body['allow_url_fopen'])->toBe('0');
     expect($body['http_helper_loaded'])->toBeTrue();
     expect($body['open_basedir'])->not->toContain('/app/Edge');
-    expect($body['open_basedir'])->toContain('/loxodontu-edge-runtime/');
+    expect($body['open_basedir'])->toContain('/loxodontu-edge-functions/');
     expect($body['can_read_app_edge_file'])->toBeFalse();
 });
 

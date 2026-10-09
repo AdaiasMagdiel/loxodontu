@@ -9,12 +9,24 @@ Functions can be created from the dashboard by writing or pasting PHP code, or b
 file. The UI generates the `slug` from the function name while you type, and the slug can still be
 edited before saving.
 
-User-provided function source is executed in a separate PHP process with a short timeout, memory
-limit, an isolated temporary runtime, `open_basedir` restricted to the function sandbox/runtime
-files, `allow_url_fopen` disabled, and common dangerous functions disabled. This is a pragmatic
-shared-hosting sandbox, not the same security boundary as a container, VM, or dedicated isolate. It is
-designed to reduce filesystem/path discovery and host access while keeping the feature deployable in
-plain PHP environments.
+User-provided function source is executed in a separate PHP process with:
+
+- a short timeout, a memory limit and a cap on how much output it may produce;
+- `open_basedir` restricted to the function's own directory, which holds its own copy of the
+  runtime — nothing is shared with other functions or projects;
+- an empty environment (no web server variables or secrets);
+- no direct network access: sockets, cURL, DNS lookups and URL wrappers are disabled, and outbound
+  HTTP goes through `App\Edge\Http`, which the parent process performs on the function's behalf
+  (public `http`/`https` addresses only, at most 20 requests per invocation);
+- no process control, signals, FFI, PDO or `dl()`.
+
+This is a pragmatic shared-hosting sandbox, not the same security boundary as a container, VM, or
+dedicated isolate: the child still runs as the same OS user as the web server, so its isolation relies
+on PHP's own restrictions. If you host untrusted tenants, run Loxodontu under a dedicated OS user and
+prefer container-level isolation for the PHP process that executes functions.
+
+Class-based handlers (`"handler": "ClassName::method"`) run inside the main application process,
+outside the sandbox, so only **platform administrators** can create or run them.
 
 ## Database access
 
@@ -140,8 +152,9 @@ return function (FunctionRequest $request): FunctionResponse {
 };
 ```
 
-Use `App\Edge\Http` for outbound HTTP calls. Direct filesystem URL wrappers such as
-`file_get_contents('https://example.com')` are disabled inside the sandbox.
+Use `App\Edge\Http` for outbound HTTP calls — it is the only way out of the sandbox. Requests to
+localhost, private or reserved addresses throw a `RuntimeException`, redirects are not followed, and
+each request is bounded by the function's remaining time (and 10 seconds at most).
 
 External invocation requires a project API key with the `function` permission when
 `require_api_key` is enabled:

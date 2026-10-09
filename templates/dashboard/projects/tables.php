@@ -124,7 +124,7 @@ ob_start();
                             </div>
                             <textarea v-model="ui(table.id).newPolicy.expression" rows="2" class="input mt-2 font-mono" placeholder="created_by = $auth.id OR $auth.role = 'admin'"></textarea>
                             <p class="text-xs mt-1" style="color:var(--text-muted);">
-                                Raw SQL boolean expression, evaluated against this table's columns. Placeholders:
+                                SQL boolean expression using only this table's columns, literals and basic functions (no subqueries). Placeholders:
                                 <code v-for="ph in authPlaceholders" :key="ph" class="font-mono mr-1" style="color:var(--accent);">{{ ph }}</code>
                                 — on INSERT/UPDATE this also acts as a WITH CHECK: a write whose values don't satisfy it is rejected (403), not silently corrected.
                             </p>
